@@ -1,21 +1,10 @@
 import { NavLink, Outlet, useParams } from "react-router-dom";
-import { useBatch } from "../api/hooks";
 import { DEMO_BATCH_ID } from "../lib/constants";
 
 const linkCls = ({ isActive }: { isActive: boolean }) =>
   `rounded-md border px-3 py-1.5 text-[13px] font-medium ${
     isActive ? "border-line bg-sunk text-ink" : "border-transparent text-muted hover:text-ink"
   }`;
-
-function BatchLabel({ batchId }: { batchId: string }) {
-  const { data } = useBatch(batchId);
-  if (!data) return null;
-  return (
-    <span className="min-w-0 truncate text-[13px] text-muted">
-            {[data.course, data.assignment, `${data.submissions.length} работ`].filter(Boolean).join(" · ")}
-    </span>
-  );
-}
 
 export function Layout() {
   const { batchId = DEMO_BATCH_ID } = useParams();
@@ -32,7 +21,6 @@ export function Layout() {
               </svg>
               IntegrityLens
             </NavLink>
-            <BatchLabel batchId={batchId} />
             <nav aria-label="Разделы" className="ml-auto flex flex-wrap gap-1">
               <NavLink to="/upload" className={linkCls}>
                 Пакет работ

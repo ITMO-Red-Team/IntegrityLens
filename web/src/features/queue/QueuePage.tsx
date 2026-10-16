@@ -54,11 +54,14 @@ export function QueuePage() {
         </div>
       </PageHeader>
 
-      <section className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-5" aria-label="Сводка">
+      <section className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-4" aria-label="Сводка">
         <Kpi label="Пар в пакете" value={pairs.length} hint={`${batch.data?.submissions.length ?? 0} работ`} />
         <Kpi label="К проверке" value={m.queued} hint={`порог ${threshold}, K = ${k}`} />
-        <Kpi label="Экономия проверки" value={pct(m.workloadReduction)} hint="пар не требуют просмотра" />
-        <Kpi label="Precision@K" value={m.precisionAtK === null ? "—" : pct(m.precisionAtK)} hint="по отзывам в очереди" />
+        <Kpi
+          label="Точность очереди"
+          value={m.precisionAtK === null ? "—" : pct(m.precisionAtK)}
+          hint="доля подтверждённых среди проверенных пар очереди"
+        />
         <Kpi label="Ложные срабатывания" value={m.falseAlarmRate === null ? "—" : pct(m.falseAlarmRate)} hint={`отзывов: ${m.rated}`} />
       </section>
 
@@ -121,16 +124,18 @@ export function QueuePage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[780px] border-collapse text-[13px]">
+                    <table className="w-full min-w-[580px] border-collapse text-[13px]">
             <thead>
               <tr>
                 <th className="th">#</th>
                 <th className="th">Пара</th>
                 <th className="th">Риск</th>
-                <th className="th text-right">Структура</th>
-                <th className="th text-right">Baseline</th>
-                <th className="th text-right">Покрытие</th>
-                <th className="th text-right">Фрагм.</th>
+                <th className="th text-right" title="Код совпадает по устройству, даже если переменные и методы переименованы">
+                  Совпадение структуры
+                </th>
+                <th className="th text-right" title="Код совпадает буквально, как написан. Переименование переменных это значение сильно снижает">
+                  Совпадение текста
+                </th>
                 <th className="th">Отзыв</th>
               </tr>
             </thead>
@@ -156,8 +161,6 @@ export function QueuePage() {
                     </td>
                     <td className="td text-right tabular-nums">{pct(p.signals.structure)}</td>
                     <td className="td text-right tabular-nums">{pct(p.signals.baseline)}</td>
-                    <td className="td text-right tabular-nums">{pct(p.signals.coverage)}</td>
-                    <td className="td text-right tabular-nums">{p.fragmentCount}</td>
                     <td className={`td text-xs ${p.decision ? decisionCls[p.decision] : "text-muted"}`}>
                       {p.decision ? DECISION_LABEL[p.decision] : "—"}
                     </td>

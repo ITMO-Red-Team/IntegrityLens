@@ -4,7 +4,7 @@ import { Layout } from "./components/Layout";
 import { UploadPage } from "./features/upload/UploadPage";
 import { BatchPage } from "./features/upload/BatchPage";
 import { QueuePage } from "./features/queue/QueuePage";
-import { ComparePage } from "./features/compare/ComparePage";
+import { CompareIndex, ComparePage } from "./features/compare/ComparePage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000, refetchOnWindowFocus: false } },
@@ -18,7 +18,7 @@ const router = createBrowserRouter([
       { path: "upload", element: <UploadPage /> },
       { path: "batches/:batchId", element: <BatchPage /> },
       { path: "batches/:batchId/queue", element: <QueuePage /> },
-      { path: "batches/:batchId/pairs", element: <ComparePage /> },
+      { path: "batches/:batchId/pairs", element: <CompareIndex /> },
       { path: "batches/:batchId/pairs/:pairId", element: <ComparePage /> },
       { path: "*", element: <div className="panel p-6">Страница не найдена.</div> },
     ],

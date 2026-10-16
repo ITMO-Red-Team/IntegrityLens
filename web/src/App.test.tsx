@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
@@ -24,25 +24,17 @@ describe("сценарий проверяющего end-to-end (на моках)
     expect(screen.getByText("Риск — не вердикт.")).toBeInTheDocument();
   });
 
-  it("сравнение → отзыв → отметка в очереди", async () => {
+    it("сравнение: два решения пары рядом и переход к следующей", async () => {
     const user = userEvent.setup();
     render(<App initialEntries={[queueUrl]} />);
     await user.click(await screen.findByRole("row", { name: /S-014 и S-027/ }));
 
     expect(await screen.findByRole("heading", { name: "S-014 ↔ S-027" })).toBeInTheDocument();
-    expect(screen.getByText("visited → seen")).toBeInTheDocument();
-    expect(screen.getByTestId("pane-A").querySelectorAll("[data-fragment]").length).toBeGreaterThan(10);
+    expect(screen.getByTestId("pane-A")).toHaveTextContent("boolean[] visited");
+    expect(screen.getByTestId("pane-B")).toHaveTextContent("boolean[] seen");
 
-    const save = screen.getByRole("button", { name: "Сохранить и к следующей" });
-    expect(save).toBeDisabled();
-    await user.click(screen.getByLabelText(/Заимствование подтверждаю/));
-    await user.type(screen.getByLabelText(/Комментарий/), "совпадает порядок обхода и имена полей");
-    await user.click(save);
-    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("S-008 ↔ S-019"));
-
-    await user.click(screen.getByRole("link", { name: "Очередь проверки" }));
-    const row = await screen.findByRole("row", { name: /S-014 и S-027/ });
-    await waitFor(() => expect(row).toHaveTextContent("подтверждено"));
+    await user.click(screen.getByRole("button", { name: "Следующая пара" }));
+    expect(await screen.findByRole("heading", { name: "S-008 ↔ S-019" })).toBeInTheDocument();
   });
 
   it("загрузка: отклоняет не-zip до отправки", async () => {

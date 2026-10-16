@@ -1,7 +1,6 @@
 import { strFromU8, unzipSync } from "fflate";
 import { delay, http, HttpResponse } from "msw";
 import type { Decision, FeedbackInput } from "../api/types";
-import { exportRows, toCsv } from "../lib/queue";
 import type { CorpusItem } from "./corpus";
 import * as db from "./db";
 import { clusters } from "./engine";
@@ -29,6 +28,7 @@ async function readArchive(archive: File): Promise<CorpusItem[]> {
 }
 
 export const handlers = [
+
   http.get("*/api/batches", async () => {
     await latency();
     return HttpResponse.json(db.listBatches());
@@ -76,42 +76,11 @@ export const handlers = [
       total: pairs.length,
     });
   }),
-
-  http.get("*/api/batches/:batchId/export", async ({ params, request }) => {
-    await latency();
-    const id = String(params.batchId);
-    const pairs = db.listPairs(id);
-    const batch = db.currentBatch(id);
-    if (!pairs || !batch) return error(404, "Пакет не найден");
-    const q = new URL(request.url).searchParams;
-    const threshold = Number(q.get("threshold") ?? 45);
-    const k = Number(q.get("k") ?? 10);
-    const rows = exportRows(pairs, threshold, k);
-    if (q.get("format") === "json") {
-      return HttpResponse.json(
-        {
-          batchId: id,
-          assignment: batch.assignment,
-          threshold,
-          k,
-          generatedAt: new Date().toISOString(),
-          note: "Risk ranking for manual review. Not a verdict.",
-          queue: rows,
-        },
-        { headers: { "Content-Disposition": `attachment; filename="${id}-queue.json"` } },
-      );
-    }
-    return new HttpResponse(toCsv(rows), {
-      headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${id}-queue.csv"` },
-    });
-  }),
-
   http.get("*/api/pairs/:pairId", async ({ params }) => {
     await latency();
     const p = db.getPair(String(params.pairId));
     return p ? HttpResponse.json(p) : error(404, "Пара не найдена");
   }),
-
   http.put("*/api/pairs/:pairId/feedback", async ({ params, request }) => {
     await latency();
     const id = String(params.pairId);

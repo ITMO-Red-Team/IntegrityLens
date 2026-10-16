@@ -1,4 +1,4 @@
-import type { Batch, ExportFormat, Feedback, FeedbackInput, NewBatchInput, PairDetail, PairList } from "./types";
+import type { Batch, Feedback, FeedbackInput, NewBatchInput, PairDetail, PairList } from "./types";
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) || "";
 
@@ -54,10 +54,4 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     }),
-
-  exportQueue: async (batchId: string, format: ExportFormat, threshold: number, k: number) => {
-    const res = await fetch(url(`/batches/${encodeURIComponent(batchId)}/export`, { format, threshold, k }));
-    if (!res.ok) throw new ApiError(res.status, "Не удалось сформировать экспорт");
-    return res.blob();
-  },
 };

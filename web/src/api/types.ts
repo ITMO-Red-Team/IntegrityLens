@@ -93,5 +93,3 @@ export interface NewBatchInput {
   language: Language;
   archive: File;
 }
-
-export type ExportFormat = "csv" | "json";

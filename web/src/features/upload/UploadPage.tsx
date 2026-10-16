@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { useCreateBatch } from "../../api/hooks";
 import { PageHeader } from "../../components/ui";
 
-const MAX_ARCHIVE_BYTES = 20 * 1024 * 1024;
+import { MAX_ARCHIVE_BYTES, MAX_ARCHIVE_MB, MAX_WORKS, MIN_WORKS } from "../../lib/constants";
 
 function validateArchive(f: File): string | null {
   if (!/\.zip$/i.test(f.name)) return `${f.name}: нужен архив .zip`;
-  if (f.size > MAX_ARCHIVE_BYTES) return `${f.name}: больше 20 МБ`;
+    if (f.size > MAX_ARCHIVE_BYTES) return `${f.name}: больше ${MAX_ARCHIVE_MB} МБ`;
   if (f.size === 0) return `${f.name}: пустой файл`;
   return null;
 }
@@ -109,7 +109,7 @@ export function UploadPage() {
             ) : (
               <>
                 <p className="font-semibold">Перетащите архив .zip или нажмите, чтобы выбрать</p>
-                <p className="text-muted">Внутри — файлы .java, один файл на одну работу. До 20 МБ.</p>
+                <p className="text-muted">Внутри — от {MIN_WORKS} до {MAX_WORKS} файлов .java, один файл на одну работу. До {MAX_ARCHIVE_MB} МБ.</p>
               </>
             )}
             <input

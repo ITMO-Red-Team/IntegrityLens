@@ -5,7 +5,7 @@ import type { CorpusItem } from "./corpus";
 import * as db from "./db";
 import { clusters } from "./engine";
 
-const MAX_ARCHIVE_BYTES = 20 * 1024 * 1024;
+import { MAX_ARCHIVE_BYTES, MAX_ARCHIVE_MB, MAX_WORKS, MIN_WORKS } from "../lib/constants";
 const DECISIONS: Decision[] = ["confirmed", "acceptable", "false_positive"];
 
 const latency = () => delay(import.meta.env.MODE === "test" ? 0 : 150);
@@ -42,7 +42,7 @@ export const handlers = [
     const archive = fd.get("archive");
     if (!course || !assignment) return error(400, "Укажите курс и задание");
     if (!(archive instanceof File)) return error(400, "Прикрепите архив .zip");
-    if (archive.size > MAX_ARCHIVE_BYTES) return error(413, "Архив больше 20 МБ");
+        if (archive.size > MAX_ARCHIVE_BYTES) return error(413, `Архив больше ${MAX_ARCHIVE_MB} МБ`);
 
     let items: CorpusItem[];
     try {
@@ -50,7 +50,8 @@ export const handlers = [
     } catch {
       return error(400, "Файл не похож на zip-архив");
     }
-    if (items.length < 2) return error(400, `В архиве найдено файлов .java: ${items.length}. Нужно минимум два`);
+      if (items.length < MIN_WORKS || items.length > MAX_WORKS)
+        return error(400, `В архиве файлов .java: ${items.length}. Нужно от ${MIN_WORKS} до ${MAX_WORKS}`);
 
     const batch = db.createBatch({ course, assignment }, items, import.meta.env.MODE === "test" ? 0 : 2000);
     return HttpResponse.json(batch, { status: 202 });

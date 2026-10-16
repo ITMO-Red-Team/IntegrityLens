@@ -63,6 +63,16 @@ describe("сценарий проверяющего end-to-end (на моках)
     expect(await screen.findByRole("alert")).toHaveTextContent("Файл не похож на zip-архив");
   });
 
+    it("загрузка: отклоняет архив, где меньше 5 работ", async () => {
+    const user = userEvent.setup();
+    render(<App initialEntries={["/upload"]} />);
+    await user.type(await screen.findByLabelText("Задание"), "ДЗ-5");
+    const zip = zipSync(Object.fromEntries(DEMO_CORPUS.slice(0, 3).map((s, i) => [`hw/${i}/${s.fileName}`, strToU8(s.code)])));
+    await user.upload(screen.getByTestId("archive-input"), new File([zip], "small.zip"));
+    await user.click(screen.getByRole("button", { name: "Запустить анализ" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("В архиве файлов .java: 3. Нужно от 5 до 50");
+  });
+
   it("загрузка архива: работы псевдонимизированы, ФИО из имён папок не видны", async () => {
     const user = userEvent.setup();
     render(<App initialEntries={["/upload"]} />);

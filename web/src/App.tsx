@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { UploadPage } from "./features/upload/UploadPage";
+import { BatchPage } from "./features/upload/BatchPage";
 import { QueuePage } from "./features/queue/QueuePage";
 import { ComparePage } from "./features/compare/ComparePage";
 
@@ -15,6 +16,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate replace to="/upload" /> },
       { path: "upload", element: <UploadPage /> },
+      { path: "batches/:batchId", element: <BatchPage /> },
       { path: "batches/:batchId/queue", element: <QueuePage /> },
       { path: "batches/:batchId/pairs", element: <ComparePage /> },
       { path: "batches/:batchId/pairs/:pairId", element: <ComparePage /> },

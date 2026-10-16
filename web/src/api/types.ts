@@ -88,8 +88,6 @@ export interface PairDetail extends PairSummary {
 }
 
 export interface NewBatchInput {
-  course: string;
-  assignment: string;
   language: Language;
   archive: File;
 }

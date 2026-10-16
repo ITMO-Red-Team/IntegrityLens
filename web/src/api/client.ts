@@ -36,8 +36,6 @@ export const api = {
 
   createBatch: (input: NewBatchInput) => {
     const fd = new FormData();
-    fd.set("course", input.course);
-    fd.set("assignment", input.assignment);
     fd.set("language", input.language);
     fd.set("archive", input.archive, input.archive.name);
     return request<Batch>(url("/batches"), { method: "POST", body: fd });

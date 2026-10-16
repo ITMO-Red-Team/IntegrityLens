@@ -37,10 +37,7 @@ export const handlers = [
   http.post("*/api/batches", async ({ request }) => {
     await latency();
     const fd = await request.formData();
-    const course = String(fd.get("course") ?? "").trim();
-    const assignment = String(fd.get("assignment") ?? "").trim();
     const archive = fd.get("archive");
-    if (!course || !assignment) return error(400, "Укажите курс и задание");
     if (!(archive instanceof File)) return error(400, "Прикрепите архив .zip");
         if (archive.size > MAX_ARCHIVE_BYTES) return error(413, `Архив больше ${MAX_ARCHIVE_MB} МБ`);
 
@@ -53,7 +50,8 @@ export const handlers = [
       if (items.length < MIN_WORKS || items.length > MAX_WORKS)
         return error(400, `В архиве файлов .java: ${items.length}. Нужно от ${MIN_WORKS} до ${MAX_WORKS}`);
 
-    const batch = db.createBatch({ course, assignment }, items, import.meta.env.MODE === "test" ? 0 : 2000);
+    const assignment = archive.name.replace(/\.zip$/i, "");
+    const batch = db.createBatch({ course: "", assignment }, items, import.meta.env.MODE === "test" ? 0 : 2000);
     return HttpResponse.json(batch, { status: 202 });
   }),
 

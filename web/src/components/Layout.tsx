@@ -12,7 +12,7 @@ function BatchLabel({ batchId }: { batchId: string }) {
   if (!data) return null;
   return (
     <span className="min-w-0 truncate text-[13px] text-muted">
-      {data.course} · {data.assignment} · {data.submissions.length} работ
+            {[data.course, data.assignment, `${data.submissions.length} работ`].filter(Boolean).join(" · ")}
     </span>
   );
 }

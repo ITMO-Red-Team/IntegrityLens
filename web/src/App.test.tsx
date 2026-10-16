@@ -48,7 +48,7 @@ describe("сценарий проверяющего end-to-end (на моках)
   it("загрузка: отклоняет не-zip до отправки", async () => {
     const user = userEvent.setup({ applyAccept: false });
     render(<App initialEntries={["/upload"]} />);
-    await user.type(await screen.findByLabelText("Задание"), "ДЗ-5");
+        await screen.findByRole("heading", { name: "Загрузка архива с работами" });
     await user.upload(screen.getByTestId("archive-input"), new File(["x"], "notes.txt"));
     expect(screen.getByRole("alert")).toHaveTextContent("notes.txt: нужен архив .zip");
     expect(screen.getByRole("button", { name: "Запустить анализ" })).toBeDisabled();
@@ -57,7 +57,7 @@ describe("сценарий проверяющего end-to-end (на моках)
   it("загрузка: показывает ошибку api для битого архива", async () => {
     const user = userEvent.setup();
     render(<App initialEntries={["/upload"]} />);
-    await user.type(await screen.findByLabelText("Задание"), "ДЗ-5");
+        await screen.findByRole("heading", { name: "Загрузка архива с работами" });
     await user.upload(screen.getByTestId("archive-input"), new File(["not a zip"], "broken.zip"));
     await user.click(screen.getByRole("button", { name: "Запустить анализ" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Файл не похож на zip-архив");
@@ -66,7 +66,7 @@ describe("сценарий проверяющего end-to-end (на моках)
     it("загрузка: отклоняет архив, где меньше 5 работ", async () => {
     const user = userEvent.setup();
     render(<App initialEntries={["/upload"]} />);
-    await user.type(await screen.findByLabelText("Задание"), "ДЗ-5");
+        await screen.findByRole("heading", { name: "Загрузка архива с работами" });
     const zip = zipSync(Object.fromEntries(DEMO_CORPUS.slice(0, 3).map((s, i) => [`hw/${i}/${s.fileName}`, strToU8(s.code)])));
     await user.upload(screen.getByTestId("archive-input"), new File([zip], "small.zip"));
     await user.click(screen.getByRole("button", { name: "Запустить анализ" }));
@@ -76,10 +76,10 @@ describe("сценарий проверяющего end-to-end (на моках)
   it("загрузка архива: работы псевдонимизированы, ФИО из имён папок не видны", async () => {
     const user = userEvent.setup();
     render(<App initialEntries={["/upload"]} />);
-    await user.type(await screen.findByLabelText("Задание"), "ДЗ-4 повтор");
+        await screen.findByRole("heading", { name: "Загрузка архива с работами" });
     await user.upload(screen.getByTestId("archive-input"), demoArchive());
     await user.click(screen.getByRole("button", { name: "Запустить анализ" }));
-    expect(await screen.findByRole("heading", { name: "ДЗ-4 повтор" })).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: "hw4" })).toBeInTheDocument();
     expect(screen.getByText("S-001")).toBeInTheDocument();
     expect(screen.getByText("work_001.java")).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/ivanov|petrov|sidorova/);

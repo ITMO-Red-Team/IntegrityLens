@@ -1,16 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import { useState } from "react";
+import { createBrowserRouter, createMemoryRouter, Navigate, RouterProvider, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { UploadPage } from "./features/upload/UploadPage";
 import { BatchPage } from "./features/upload/BatchPage";
+import { UploadPage } from "./features/upload/UploadPage";
 import { QueuePage } from "./features/queue/QueuePage";
 import { CompareIndex, ComparePage } from "./features/compare/ComparePage";
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 10_000, refetchOnWindowFocus: false } },
-});
+const makeQueryClient = () =>
+  new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 10_000, refetchOnWindowFocus: false } } });
 
-const router = createBrowserRouter([
+export const routes: RouteObject[] = [
   {
     element: <Layout />,
     children: [
@@ -23,9 +23,13 @@ const router = createBrowserRouter([
       { path: "*", element: <div className="panel p-6">Страница не найдена.</div> },
     ],
   },
-]);
+];
 
-export function App() {
+export function App({ initialEntries }: { initialEntries?: string[] }) {
+  const [queryClient] = useState(makeQueryClient);
+  const [router] = useState(() =>
+    initialEntries ? createMemoryRouter(routes, { initialEntries }) : createBrowserRouter(routes),
+  );
   return (
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />

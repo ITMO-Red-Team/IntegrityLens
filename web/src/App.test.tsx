@@ -1,0 +1,77 @@
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { strToU8, zipSync } from "fflate";
+import { describe, expect, it } from "vitest";
+import { App } from "./App";
+import { DEMO_CORPUS } from "./mocks/corpus";
+
+const queueUrl = "/batches/demo-hw4/queue?threshold=45&k=5";
+
+function demoArchive() {
+  const names = ["ivanov", "petrov", "sidorova", "kuznetsov", "smirnova", "popov", "volkova", "sokolov"];
+  const zip = zipSync(Object.fromEntries(DEMO_CORPUS.map((s, i) => [`hw4/${names[i]}/${s.fileName}`, strToU8(s.code)])));
+  return new File([zip], "hw4.zip", { type: "application/zip" });
+}
+
+describe("сценарий проверяющего end-to-end (на моках)", () => {
+  it("очередь: самая рискованная пара сверху, кластеры, дисклеймер", async () => {
+    render(<App initialEntries={[queueUrl]} />);
+    const rows = within(await screen.findByRole("table")).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(28);
+    expect(rows[0]).toHaveTextContent("S-014");
+    expect(rows[0]).toHaveTextContent("S-027");
+    expect(screen.getByText(/Кластер 1/)).toBeInTheDocument();
+    expect(screen.getByText("Риск — не вердикт.")).toBeInTheDocument();
+  });
+
+  it("сравнение → отзыв → отметка в очереди", async () => {
+    const user = userEvent.setup();
+    render(<App initialEntries={[queueUrl]} />);
+    await user.click(await screen.findByRole("row", { name: /S-014 и S-027/ }));
+
+    expect(await screen.findByRole("heading", { name: "S-014 ↔ S-027" })).toBeInTheDocument();
+    expect(screen.getByText("visited → seen")).toBeInTheDocument();
+    expect(screen.getByTestId("pane-A").querySelectorAll("[data-fragment]").length).toBeGreaterThan(10);
+
+    const save = screen.getByRole("button", { name: "Сохранить и к следующей" });
+    expect(save).toBeDisabled();
+    await user.click(screen.getByLabelText(/Заимствование подтверждаю/));
+    await user.type(screen.getByLabelText(/Комментарий/), "совпадает порядок обхода и имена полей");
+    await user.click(save);
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("S-008 ↔ S-019"));
+
+    await user.click(screen.getByRole("link", { name: "Очередь проверки" }));
+    const row = await screen.findByRole("row", { name: /S-014 и S-027/ });
+    await waitFor(() => expect(row).toHaveTextContent("подтверждено"));
+  });
+
+  it("загрузка: отклоняет не-zip до отправки", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    render(<App initialEntries={["/upload"]} />);
+    await user.type(await screen.findByLabelText("Задание"), "ДЗ-5");
+    await user.upload(screen.getByTestId("archive-input"), new File(["x"], "notes.txt"));
+    expect(screen.getByRole("alert")).toHaveTextContent("notes.txt: нужен архив .zip");
+    expect(screen.getByRole("button", { name: "Запустить анализ" })).toBeDisabled();
+  });
+
+  it("загрузка: показывает ошибку api для битого архива", async () => {
+    const user = userEvent.setup();
+    render(<App initialEntries={["/upload"]} />);
+    await user.type(await screen.findByLabelText("Задание"), "ДЗ-5");
+    await user.upload(screen.getByTestId("archive-input"), new File(["not a zip"], "broken.zip"));
+    await user.click(screen.getByRole("button", { name: "Запустить анализ" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Файл не похож на zip-архив");
+  });
+
+  it("загрузка архива: работы псевдонимизированы, ФИО из имён папок не видны", async () => {
+    const user = userEvent.setup();
+    render(<App initialEntries={["/upload"]} />);
+    await user.type(await screen.findByLabelText("Задание"), "ДЗ-4 повтор");
+    await user.upload(screen.getByTestId("archive-input"), demoArchive());
+    await user.click(screen.getByRole("button", { name: "Запустить анализ" }));
+    expect(await screen.findByRole("heading", { name: "ДЗ-4 повтор" })).toBeInTheDocument();
+    expect(screen.getByText("S-001")).toBeInTheDocument();
+    expect(screen.getByText("work_001.java")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/ivanov|petrov|sidorova/);
+  });
+});

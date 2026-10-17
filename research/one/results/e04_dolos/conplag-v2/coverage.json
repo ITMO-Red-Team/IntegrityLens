@@ -1,0 +1,16 @@
+{
+  "dolos_failed": {
+    "problem-19": [
+      "db7f80a5-2e802bec"
+    ]
+  },
+  "dolos_empty": {},
+  "pairs_total": 911,
+  "pairs_compared": 909,
+  "pairs_compared_with_dolos_error_node": 0,
+  "solo_runs": {
+    "pairs": 20,
+    "max_abs_diff": 0.0
+  },
+  "dolos": "Dolos v2.9.3 · Node v24.11.1 · Tree-sitter ^0.25.0"
+}

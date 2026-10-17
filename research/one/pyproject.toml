@@ -1,0 +1,29 @@
+[project]
+name = "research-one"
+version = "0.1.0"
+description = "Исследование 1: JPlag (baseline) против structsim на решениях одного языка"
+requires-python = ">=3.12"
+dependencies = [
+    # Наш метод — прямо из tools/, без копии: исследование не владеет инструментом.
+    "structsim",
+    # Только ради бинарника semgrep-core внутри пакета: та же версия, что в
+    # tools/structsim/docker/semgrep.Dockerfile, но без Docker.
+    "semgrep==1.180.0",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+    "matplotlib>=3.9",
+]
+
+[tool.uv.sources]
+structsim = { path = "../../tools/structsim", editable = true }
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/research_one"]

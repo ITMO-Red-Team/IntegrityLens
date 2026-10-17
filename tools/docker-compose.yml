@@ -1,0 +1,19 @@
+# Сборка образов инструментов:  docker compose -f tools/docker-compose.yml build
+# Запускаются образы не через compose, а из кода (например
+# research_two.containers): каждому прогону нужны свои монтирования и
+# аргументы.
+name: integritylens-tools
+
+services:
+  jplag:
+    image: integritylens/jplag:6.3.0
+    build:
+      context: ./jplag
+      dockerfile: jplag.Dockerfile
+
+  # Шаг 1 метода structsim; образ живёт внутри инструмента, которому служит.
+  semgrep:
+    image: integritylens/semgrep:1.180.0
+    build:
+      context: ./structsim/docker
+      dockerfile: semgrep.Dockerfile

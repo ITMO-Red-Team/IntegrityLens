@@ -1,0 +1,4 @@
+set,structsim_auc,jplag_default_avg,jplag_default_max,jplag_best_avg,best_avg_setting,jplag_best_max,best_max_setting,ss_minus_best_avg,ss_minus_best_avg_low,ss_minus_best_avg_high,ss_minus_best_max,ss_minus_best_max_low,ss_minus_best_max_high
+IR-Plag,0.6107,0.5559,0.5435,0.5961,t5,0.5881,t5,0.0146,-0.0161,0.0448,0.0226,-0.0086,0.0544
+ConPlag v1,0.8546,0.8652,0.9091,0.8770,t12,0.9163,t5,-0.0223,-0.0459,0.0011,-0.0616,-0.0927,-0.0311
+ConPlag v2,0.9639,0.9399,0.9393,0.9500,t5,0.9490,t5,0.0139,0.0016,0.0268,0.0149,0.0021,0.0283

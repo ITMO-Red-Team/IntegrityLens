@@ -1,0 +1,19 @@
+{
+  "jplag_failed": {
+    "problem-10": [
+      "{'submissionId': 'd6af96bd-50751b99', 'submissionState': 'CANNOT_PARSE'}"
+    ],
+    "problem-19": [
+      "{'submissionId': 'db7f80a5-2e802bec', 'submissionState': 'CANNOT_PARSE'}"
+    ]
+  },
+  "structsim_skipped": {
+    "problem-19": {
+      "db7f80a5-2e802bec": "semgrep-core вернул 1 на db7f80a5.java: [00.06][WARNING]: fail to fully parse /Users/eugeneakimov/Projects/IntegrityLens/research/one/data/conplag/versions/version_2/3d06b643_db7f80a5/db7f80a5.java\n[00.06][ERROR]: /Users/eugeneakimov/Projects/IntegrityLens/research/one/data/conplag/versions/version_2/3d06b643_db7f80a5/db7f80a5.java:1:0: \"Other syntax error\": Common.UnixExit(_)\nCommon.UnixExit(_)\nRaised at Core_exit_code.exit_semgrep in file \"OSS/src/core_cli/Core_exit_code.ml\", line 47, characters 2-30\nCalled from Core_actions.try_wit"
+    }
+  },
+  "pairs_total": 911,
+  "pairs_scored_by_both": 909,
+  "pairs_missing_jplag": 2,
+  "pairs_missing_structsim": 1
+}

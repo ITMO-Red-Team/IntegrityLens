@@ -1,0 +1,30 @@
+[project]
+name = "structsim"
+version = "0.1.0"
+description = "Структурное сходство программ: сравнение устройства кода, в том числе на разных языках"
+requires-python = ">=3.12"
+# Ядро метода намеренно без зависимостей: шаги 2–4 — это обход дерева и
+# арифметика над последовательностями меток. Единственная внешняя часть —
+# Semgrep, и он запускается в контейнере, а не импортируется.
+dependencies = []
+
+[project.scripts]
+structsim = "structsim.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/structsim"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Проверки шага 1 требуют Docker и собранного образа, поэтому по умолчанию
+# не идут: остальные 100+ тестов — чистые функции и должны оставаться
+# быстрыми. Запустить их: uv run pytest -m docker
+addopts = "-m 'not docker'"
+markers = ["docker: требует Docker и образ integritylens/semgrep"]

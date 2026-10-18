@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["contract", "runId", "method", "params", "submissions"],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {"const": "integritylens.core/1"},
+    "runId": {"type": "string", "format": "uuid"},
+    "method": {"enum": ["jplag", "structsim"]},
+    "params": {"type": "object"},
+    "submissions": {
+      "type": "array", "minItems": 5, "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": ["id", "language", "files"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "language": {"const": "java"},
+          "files": {
+            "type": "array", "minItems": 1, "maxItems": 1,
+            "items": {"type": "string", "pattern": "^[^/\\\\]+\\.java$", "not": {"enum": [".", ".."]}}
+          }
+        }
+      }
+    }
+  }
+}

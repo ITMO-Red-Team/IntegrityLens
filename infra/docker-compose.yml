@@ -1,6 +1,7 @@
 name: integritylens
 
 x-worker: &worker
+  image: integritylens-worker:0.1.0
   build:
     context: ..
     dockerfile: worker/Dockerfile

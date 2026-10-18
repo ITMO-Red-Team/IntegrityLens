@@ -26,3 +26,4 @@ integritylens:
     bucket: ${S3_BUCKET:integritylens}
 springdoc:
   paths-to-match: /api/**
+  writer-with-order-by-keys: true

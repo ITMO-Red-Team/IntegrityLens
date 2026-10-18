@@ -67,7 +67,8 @@ public class QueryService {
                 } else {
                     var entry = method.submissions().get(row.id().toString());
                     values.put(method.run().method(), new SubmissionMethod(entry.status(), entry.score(),
-                            entry.matches() == null ? List.of() : entry.matches(),
+                            entry.matches() == null ? List.of() : entry.matches().stream().map(m -> new Match(
+                                    m.with(), m.score(), m.fragments() == null ? List.of() : m.fragments())).toList(),
                             entry.stats() == null ? Map.of() : entry.stats(), entry.reason()));
                 }
             }

@@ -1,7 +1,14 @@
-FROM maven:3.9.11-eclipse-temurin-25 AS build
+FROM maven:3.9.11-eclipse-temurin-25 AS dependencies
 WORKDIR /build
 COPY api/pom.xml api/pom.xml
 RUN mvn -f api/pom.xml dependency:go-offline -q
+
+FROM eclipse-temurin:25-jdk AS build
+COPY --from=dependencies /usr/share/maven /usr/share/maven
+COPY --from=dependencies /root/.m2 /root/.m2
+ENV PATH="/usr/share/maven/bin:${PATH}"
+WORKDIR /build
+COPY api/pom.xml api/pom.xml
 COPY api/src api/src
 COPY infra/db/migrations infra/db/migrations
 ARG JAVA_BUILD_OPTS=""

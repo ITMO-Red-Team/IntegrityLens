@@ -9,6 +9,7 @@
 - `disagreements.csv` — пары, где инструменты расходятся сильнее всего;
 - `h4.csv` — комбинация оценок: логистическая регрессия, обученная на train, и
   среднее рангов без обучения; AUC на test против каждой оценки отдельно;
+- `length_ratio.csv` — AUC по отношению длин программ пары;
 - `timing.csv` — время на пару и на решение у обоих инструментов.
 
 Графики (`results/figures/`): `roc_pr.png`, `t_sweep.png`,
@@ -160,6 +161,30 @@ def h4(parts: dict[str, pd.DataFrame]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def length_ratio(parts: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """AUC по корзинам отношения длин пары (короткая / длинная, в метках structsim).
+
+    Проверка объяснения проигрыша на as-is: заготовка участника раздувает одну
+    программу пары, симметричные меры это штрафуют, а `max` у JPlag меряет
+    относительно короткой программы и заготовку не замечает.
+    """
+    parse = pd.read_csv(paths.TABLES_DIR / "structsim_parse.csv", dtype={"submission": str})
+    cols = [S, "structsim:blocks", J, "jplag-default:max"]
+    rows = []
+    for version, part in parts.items():
+        n = parse[parse["version"] == version].set_index("submission")["labels"]
+        a, b = part["sub1"].map(n), part["sub2"].map(n)
+        ratio = np.minimum(a, b) / np.maximum(a, b)
+        buckets = pd.cut(ratio, [0, 0.5, 0.75, 1.0])
+        for bucket, g in part.groupby(buckets, observed=True):
+            y = _y(g)
+            row = {"version": version, "ratio": str(bucket), "pairs": len(g), "positive": int(y.sum())}
+            for col in cols:
+                row[col] = stats.auc(y, g[col].to_numpy()) if 0 < y.sum() < len(y) else np.nan
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def timing() -> pd.DataFrame:
     parse = pd.read_csv(paths.TABLES_DIR / "structsim_parse.csv")
     runs = pd.read_csv(paths.TABLES_DIR / "jplag_runs.csv")
@@ -274,6 +299,7 @@ def run() -> None:
         "agreement": agreement(parts),
         "disagreements": disagreements(parts),
         "h4": h4(parts),
+        "length_ratio": length_ratio(parts),
         "timing": timing(),
     }
     for name, frame in out.items():

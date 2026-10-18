@@ -4,7 +4,8 @@ COPY api/pom.xml api/pom.xml
 RUN mvn -f api/pom.xml dependency:go-offline -q
 COPY api/src api/src
 COPY infra/db/migrations infra/db/migrations
-RUN mvn -f api/pom.xml package -DskipTests -q
+ARG JAVA_BUILD_OPTS=""
+RUN MAVEN_OPTS="$JAVA_BUILD_OPTS" mvn -f api/pom.xml package -DskipTests -q
 
 FROM eclipse-temurin:25-jre
 WORKDIR /app

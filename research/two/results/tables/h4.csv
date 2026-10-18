@@ -1,0 +1,9 @@
+version,combination,vs,n_test,auc_combo,auc_base,diff,boot_low,boot_high,delong_p,coef_structsim,coef_jplag
+as-is,"logreg(structsim, jplag)",structsim:combined,681,0.8653,0.8522,0.0131,-0.0006,0.0273,0.0624,1.0404,1.3080
+as-is,"logreg(structsim, jplag)",jplag-default:avg,681,0.8653,0.8595,0.0058,-0.0077,0.0191,0.4002,1.0404,1.3080
+as-is,"rank-mean(structsim, jplag)",structsim:combined,681,0.8661,0.8522,0.0139,0.0012,0.0265,0.0303,,
+as-is,"rank-mean(structsim, jplag)",jplag-default:avg,681,0.8661,0.8595,0.0066,-0.0076,0.0207,0.3630,,
+template-free,"logreg(structsim, jplag)",structsim:combined,679,0.9607,0.9619,-0.0012,-0.0089,0.0064,0.7544,2.2426,1.7256
+template-free,"logreg(structsim, jplag)",jplag-default:avg,679,0.9607,0.9324,0.0283,0.0163,0.0414,0.0000,2.2426,1.7256
+template-free,"rank-mean(structsim, jplag)",structsim:combined,679,0.9575,0.9619,-0.0044,-0.0135,0.0044,0.3292,,
+template-free,"rank-mean(structsim, jplag)",jplag-default:avg,679,0.9575,0.9324,0.0251,0.0148,0.0363,0.0000,,

@@ -1,0 +1,14 @@
+# Входные данные: качаются стадией s00, в git не кладём
+data/*
+!data/.gitkeep
+
+# Окружение и кеши
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Промежуточные выгрузки (AST, отчёты JPlag) — большие, воспроизводимы
+work/
+*.jplag

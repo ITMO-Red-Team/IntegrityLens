@@ -1,0 +1,11 @@
+{
+  "name": "research-one-dolos",
+  "private": true,
+  "description": "Dolos CLI для research/one: версия прибита, установка — npm ci по package-lock.json",
+  "dependencies": {
+    "@dodona/dolos": "2.9.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

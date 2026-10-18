@@ -1,0 +1,100 @@
+{
+  "checks": [
+    {
+      "check": "semgrep-core версия",
+      "ok": true,
+      "detail": "semgrep-core version: 1.180.0 (2d0a15ae8f)"
+    },
+    {
+      "check": "метки: локально == Docker, все выгрузки tests/data",
+      "ok": true,
+      "detail": "check.py:=37, langs/s.cpp:=26, langs/s.cs:=26, langs/s.go:=26, langs/s.java:=26, langs/s.js:=26, langs/s.kt:=26, langs/s.py:=26, langs/s.rs:=26, langs/s.swift:=26, relax.cpp:=24, relax.py:=24, rich.py:=70"
+    },
+    {
+      "check": "relax.cpp даёт последовательность из docs/step2.md",
+      "ok": true,
+      "detail": "FUNC P4 IF ID IDX ID + ID < ID IDX ID ; ID IDX ID = ID IDX ID + ID END END"
+    },
+    {
+      "check": "pytest tools/structsim (без docker)",
+      "ok": true,
+      "detail": "146 passed, 6 deselected in 0.12s"
+    },
+    {
+      "check": "structsim: разобраны все 3",
+      "ok": true,
+      "detail": "пропущено {}"
+    },
+    {
+      "check": "structsim: alice↔bob = 1.0 (переименование)",
+      "ok": true,
+      "detail": "COMBINED 1.000"
+    },
+    {
+      "check": "structsim: alice↔carol заметно ниже",
+      "ok": true,
+      "detail": "COMBINED 0.376"
+    },
+    {
+      "check": "JPlag: разобраны все 3",
+      "ok": true,
+      "detail": "failed=[], пар 3"
+    },
+    {
+      "check": "JPlag: alice↔bob = 1.0 (переименование)",
+      "ok": true,
+      "detail": "avg 1.000, max 1.000"
+    },
+    {
+      "check": "JPlag: alice↔carol заметно ниже",
+      "ok": true,
+      "detail": "avg 0.000, max 0.000"
+    },
+    {
+      "check": "Dolos версия 2.9.3",
+      "ok": true,
+      "detail": "Dolos v2.9.3 · Node v24.11.1 · Tree-sitter ^0.25.0"
+    },
+    {
+      "check": "Dolos: разобраны все 3",
+      "ok": true,
+      "detail": "с ошибкой разбора [], без отпечатков [], пар 3"
+    },
+    {
+      "check": "Dolos: alice↔bob = 1.0 (переименование)",
+      "ok": true,
+      "detail": "similarity 1.000, max 1.000"
+    },
+    {
+      "check": "Dolos: alice↔carol заметно ниже",
+      "ok": true,
+      "detail": "similarity 0.222, max 0.294"
+    }
+  ],
+  "pairs": [
+    {
+      "pair": "alice–bob",
+      "jplag_avg": 1.0,
+      "jplag_max": 1.0,
+      "structsim_combined": 1.0,
+      "dolos_similarity": 1.0,
+      "dolos_max": 1.0
+    },
+    {
+      "pair": "alice–carol",
+      "jplag_avg": 0.0,
+      "jplag_max": 0.0,
+      "structsim_combined": 0.3760030864197531,
+      "dolos_similarity": 0.2222222222222222,
+      "dolos_max": 0.29411764705882354
+    },
+    {
+      "pair": "bob–carol",
+      "jplag_avg": 0.0,
+      "jplag_max": 0.0,
+      "structsim_combined": 0.3760030864197531,
+      "dolos_similarity": 0.2222222222222222,
+      "dolos_max": 0.29411764705882354
+    }
+  ]
+}

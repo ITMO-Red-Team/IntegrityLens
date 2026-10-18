@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: integritylens-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/integritylens}
+    username: ${POSTGRES_USER:integritylens}
+    password: ${POSTGRES_PASSWORD:integritylens-local}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+  jackson:
+    default-property-inclusion: always
+server:
+  tomcat:
+    max-swallow-size: 11MB
+logging:
+  structured:
+    format:
+      console: logstash
+integritylens:
+  s3:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    access-key: ${S3_ACCESS_KEY:integritylens}
+    secret-key: ${S3_SECRET_KEY:integritylens-local}
+    bucket: ${S3_BUCKET:integritylens}
+springdoc:
+  paths-to-match: /api/**

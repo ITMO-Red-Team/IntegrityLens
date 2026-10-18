@@ -30,6 +30,3 @@ docker compose -f infra/docker-compose.yml down
 Данные сохраняются в Docker volumes при `down`. `down -v` удаляет данные этого Compose-проекта.
 Настройки и тестирование описаны в [infra/README.md](infra/README.md), контракт API — в
 [api/README.md](api/README.md), подключение настоящего анализа — в [core/CONTRACT.md](core/CONTRACT.md).
-
-Фронт и авторизация в эту поставку не входят. API рассчитан на закрытое окружение; ограничение доступа
-при публикации на демо обеспечивает внешний reverse proxy.

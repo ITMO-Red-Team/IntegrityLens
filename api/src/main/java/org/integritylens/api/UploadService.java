@@ -51,7 +51,7 @@ public class UploadService {
         try {
             return transaction.execute(tx -> {
                 // The lock also serializes uploads before their unique batch row exists.
-                repository.jdbc.execute("select pg_advisory_xact_lock(hashtextextended('" + hash + "', 0))");
+                repository.lockArchive(hash);
                 var duplicate = repository.batchByHash(hash);
                 if (duplicate.isPresent()) return new Upload(duplicate.get(), false);
                 UUID batchId = UUID.randomUUID();
@@ -60,23 +60,16 @@ public class UploadService {
                 String archiveKey = "batches/" + batchId + "/archive.zip";
                 uploaded.add(archiveKey);
                 storage.put(archiveKey, bytes, "application/zip");
-                repository.jdbc.update("""
-                        insert into batches(id, title, language, archive_name, archive_sha256, submission_count)
-                        values (?, ?, ?, ?, ?, ?)
-                        """, batchId, batchTitle, language, filename, hash, sources.size());
+                repository.createBatch(batchId, batchTitle, language, filename, hash, sources.size());
                 for (var source : sources) {
                     UUID id = UUID.randomUUID();
                     String key = "batches/" + batchId + "/submissions/" + id + "/source.java";
                     uploaded.add(key);
                     storage.put(key, source.bytes(), "text/plain; charset=utf-8");
-                    repository.jdbc.update("""
-                            insert into submissions(id, batch_id, original_name, language, loc, size_bytes, sha256, storage_key)
-                            values (?, ?, ?, ?, ?, ?, ?, ?)
-                            """, id, batchId, source.name(), language, source.loc(), source.bytes().length, source.sha256(), key);
+                    repository.createSubmission(id, batchId, language, source, key);
                 }
                 for (String method : METHODS) {
-                    repository.jdbc.update("insert into runs(id, batch_id, method) values (?, ?, ?)",
-                            UUID.randomUUID(), batchId, method);
+                    repository.createRun(batchId, method);
                 }
                 LOG.atInfo().addKeyValue("batchId", batchId).log("Batch uploaded");
                 return new Upload(batchId, true);

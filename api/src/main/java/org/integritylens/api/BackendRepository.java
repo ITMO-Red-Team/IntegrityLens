@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class BackendRepository {
-    final JdbcTemplate jdbc;
+    private final JdbcTemplate jdbc;
 
     record BatchRow(UUID id, String title, String language, int count, Instant createdAt) {}
     record SubmissionRow(UUID id, UUID batchId, String name, String language, int loc, String storageKey) {}
@@ -28,6 +28,28 @@ public class BackendRepository {
     Optional<UUID> batchByHash(String hash) {
         return jdbc.query("select id from batches where archive_sha256 = ?",
                 (rs, n) -> rs.getObject("id", UUID.class), hash).stream().findFirst();
+    }
+
+    void lockArchive(String hash) {
+        jdbc.query("select pg_advisory_xact_lock(hashtextextended(?, 0))", rs -> {}, hash);
+    }
+
+    void createBatch(UUID id, String title, String language, String filename, String hash, int count) {
+        jdbc.update("""
+                insert into batches(id, title, language, archive_name, archive_sha256, submission_count)
+                values (?, ?, ?, ?, ?, ?)
+                """, id, title, language, filename, hash, count);
+    }
+
+    void createSubmission(UUID id, UUID batchId, String language, ArchiveReader.Source source, String key) {
+        jdbc.update("""
+                insert into submissions(id, batch_id, original_name, language, loc, size_bytes, sha256, storage_key)
+                values (?, ?, ?, ?, ?, ?, ?, ?)
+                """, id, batchId, source.name(), language, source.loc(), source.bytes().length, source.sha256(), key);
+    }
+
+    void createRun(UUID batchId, String method) {
+        jdbc.update("insert into runs(id, batch_id, method) values (?, ?, ?)", UUID.randomUUID(), batchId, method);
     }
 
     BatchRow batch(UUID id) {

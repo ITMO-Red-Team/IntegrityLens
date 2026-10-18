@@ -36,7 +36,7 @@ services:
   minio:
     build:
       context: minio
-    command: server /data --console-address :9001
+    command: server /data --console-address :9001 --json
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-integritylens}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-integritylens-local}
@@ -61,6 +61,8 @@ services:
     build:
       context: ..
       dockerfile: api/Dockerfile
+      args:
+        JAVA_BUILD_OPTS: ${JAVA_BUILD_OPTS:-}
     environment:
       DATABASE_URL: jdbc:postgresql://postgres:5432/integritylens
       POSTGRES_USER: ${POSTGRES_USER:-integritylens}

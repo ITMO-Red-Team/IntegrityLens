@@ -17,6 +17,8 @@ def run(input_dir, output_dir):
     try:
         job = json.loads((input_dir / "job.json").read_text(encoding="utf-8"))
         validate_schema("job", job)
+        if len({s["id"] for s in job["submissions"]}) != len(job["submissions"]):
+            raise InvalidInput()
         hashes = {}
         for submission in job["submissions"]:
             name = submission["files"][0]

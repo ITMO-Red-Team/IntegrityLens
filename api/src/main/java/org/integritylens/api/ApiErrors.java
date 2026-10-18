@@ -51,7 +51,8 @@ public class ApiErrors {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<Error> unexpected(Exception ex) {
-        LOG.error("Request failed: {}", ex.getClass().getSimpleName());
+        LOG.error("Request failed: {} at {}", ex.getClass().getSimpleName(),
+                ex.getStackTrace().length == 0 ? "unknown" : ex.getStackTrace()[0]);
         return api(new ApiException(503, "SERVICE_UNAVAILABLE", "Сервис временно недоступен"));
     }
 }

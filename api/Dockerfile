@@ -16,7 +16,8 @@ RUN MAVEN_OPTS="$JAVA_BUILD_OPTS" mvn -f api/pom.xml package -DskipTests -q
 
 FROM eclipse-temurin:25-jre
 WORKDIR /app
-RUN useradd --system --uid 10001 app
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* && useradd --system --uid 10001 app
 COPY --from=build /build/api/target/api-0.1.0.jar app.jar
 USER app
 EXPOSE 8080

@@ -1,5 +1,7 @@
 import copy
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -67,6 +69,14 @@ class MockTest(unittest.TestCase):
         self.job["submissions"][0]["files"] = ["../../Main.java"]
         with self.assertRaises(InvalidInput):
             self.execute()
+
+    def test_cli_exit_codes(self):
+        for scenario, expected in (("tool_error", 1), ("invalid_input", 2), ("success", 0)):
+            self.job["params"] = {"mockScenario": scenario}
+            (self.input / "job.json").write_text(json.dumps(self.job))
+            process = subprocess.run([sys.executable, "-m", "core", "run", "--input", str(self.input),
+                                      "--output", str(self.root / "output")], capture_output=True, timeout=10)
+            self.assertEqual(process.returncode, expected, process.stderr)
 
 
 if __name__ == "__main__":

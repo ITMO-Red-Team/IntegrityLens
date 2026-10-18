@@ -1,0 +1,777 @@
+openapi: 3.1.0
+info:
+  description: MVP. JPlag и structsim возвращают детерминированные mock-оценки.
+  title: IntegrityLens API
+  version: 0.1.0
+servers:
+- url: /
+paths:
+  /api/batches:
+    get:
+      operationId: batches
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Batch"
+          description: Список пакетов
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+    post:
+      description: Идентичные байты ZIP возвращают существующий пакет; первоначальный
+        title сохраняется.
+      operationId: upload
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                archive:
+                  type: string
+                  format: binary
+                language:
+                  type: string
+                  enum:
+                  - java
+                title:
+                  type: string
+              required:
+              - archive
+              - language
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Batch"
+          description: Архив уже загружен
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Batch"
+          description: Создан новый пакет
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      summary: Загрузить ZIP с 5–50 Java-работами
+      tags:
+      - backend-controller
+  /api/batches/{batchId}:
+    get:
+      operationId: batch
+      parameters:
+      - in: path
+        name: batchId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Batch"
+          description: Пакет и прогоны
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/batches/{batchId}/pairs:
+    get:
+      operationId: pairs
+      parameters:
+      - in: path
+        name: batchId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pairs"
+          description: Пары пакета
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/batches/{batchId}/submissions:
+    get:
+      operationId: submissions
+      parameters:
+      - in: path
+        name: batchId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submissions"
+          description: Работы пакета
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/health:
+    get:
+      operationId: health
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+          description: OK
+      tags:
+      - health-controller
+  /api/pairs/{pairId}:
+    get:
+      operationId: pair
+      parameters:
+      - in: path
+        name: pairId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PairDetail"
+          description: Пара с оценками и отзывом
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/pairs/{pairId}/feedback:
+    put:
+      operationId: feedback
+      parameters:
+      - in: path
+        name: pairId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feedback"
+          description: Сохранённый отзыв
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/submissions/{submissionId}/source:
+    get:
+      operationId: source
+      parameters:
+      - in: path
+        name: submissionId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            text/plain;charset=UTF-8:
+              schema:
+                type: string
+          description: Исходный код в UTF-8
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+components:
+  schemas:
+    Batch:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        language:
+          type: string
+        pairCount:
+          type: integer
+          format: int32
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Run"
+        status:
+          type: string
+          enum:
+          - queued
+          - processing
+          - done
+          - failed
+        submissionCount:
+          type: integer
+          format: int32
+        title:
+          type: string
+      required:
+      - createdAt
+      - id
+      - language
+      - pairCount
+      - runs
+      - status
+      - submissionCount
+      - title
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        details:
+          type: object
+          additionalProperties: {}
+        message:
+          type: string
+      required:
+      - code
+      - details
+      - message
+    Feedback:
+      type: object
+      properties:
+        comment:
+          type: string
+        decision:
+          type: string
+          enum:
+          - confirmed
+          - acceptable
+          - false_positive
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - comment
+      - decision
+      - updatedAt
+    FeedbackRequest:
+      type: object
+      properties:
+        comment:
+          type:
+          - string
+          - "null"
+          maxLength: 10000
+          minLength: 0
+        decision:
+          type: string
+          enum:
+          - confirmed
+          - acceptable
+          - false_positive
+      required:
+      - decision
+    Fragment:
+      type: object
+      properties:
+        a:
+          type: array
+          items:
+            type: integer
+            format: int32
+        b:
+          type: array
+          items:
+            type: integer
+            format: int32
+      required:
+      - a
+      - b
+    Match:
+      type: object
+      properties:
+        fragments:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchFragment"
+        score:
+          type: number
+          format: double
+        with:
+          type: string
+      required:
+      - fragments
+      - score
+      - with
+    MatchFragment:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            type: integer
+            format: int32
+        withLines:
+          type: array
+          items:
+            type: integer
+            format: int32
+      required:
+      - lines
+      - withLines
+    PairDetail:
+      type: object
+      properties:
+        a:
+          type: string
+          format: uuid
+        b:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+          format: uuid
+        decision:
+          type:
+          - string
+          - "null"
+          enum:
+          - confirmed
+          - acceptable
+          - false_positive
+          - null
+        feedback:
+          anyOf:
+          - $ref: "#/components/schemas/Feedback"
+          - type: "null"
+        id:
+          type: string
+        scores:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/PairScore"
+        submissions:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/SubmissionInfo"
+      required:
+      - a
+      - b
+      - batchId
+      - decision
+      - feedback
+      - id
+      - scores
+      - submissions
+    PairScore:
+      type: object
+      properties:
+        details:
+          type: object
+          additionalProperties: {}
+        fragments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fragment"
+        reason:
+          anyOf:
+          - $ref: "#/components/schemas/Reason"
+          - type: "null"
+        value:
+          type:
+          - number
+          - "null"
+          format: double
+      required:
+      - details
+      - fragments
+      - reason
+      - value
+    PairSummary:
+      type: object
+      properties:
+        a:
+          type: string
+          format: uuid
+        b:
+          type: string
+          format: uuid
+        decision:
+          type:
+          - string
+          - "null"
+          enum:
+          - confirmed
+          - acceptable
+          - false_positive
+          - null
+        id:
+          type: string
+        scores:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/PairScore"
+      required:
+      - a
+      - b
+      - decision
+      - id
+      - scores
+    Pairs:
+      type: object
+      properties:
+        pairs:
+          type: array
+          items:
+            $ref: "#/components/schemas/PairSummary"
+        total:
+          type: integer
+          format: int32
+      required:
+      - pairs
+      - total
+    Reason:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type:
+          - string
+          - "null"
+      required:
+      - code
+    Run:
+      type: object
+      properties:
+        error:
+          type:
+          - string
+          - "null"
+        failed:
+          type:
+          - integer
+          - "null"
+          format: int32
+        finishedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+        method:
+          type: string
+          enum:
+          - jplag
+          - structsim
+        methodVersion:
+          type:
+          - string
+          - "null"
+        parsed:
+          type:
+          - integer
+          - "null"
+          format: int32
+        startedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - done
+          - failed
+      required:
+      - error
+      - failed
+      - finishedAt
+      - method
+      - methodVersion
+      - parsed
+      - startedAt
+      - status
+    Submission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        language:
+          type: string
+        loc:
+          type: integer
+          format: int32
+        methods:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/SubmissionMethod"
+        originalName:
+          type: string
+      required:
+      - id
+      - language
+      - loc
+      - methods
+      - originalName
+    SubmissionInfo:
+      type: object
+      properties:
+        language:
+          type: string
+        loc:
+          type: integer
+          format: int32
+        originalName:
+          type: string
+      required:
+      - language
+      - loc
+      - originalName
+    SubmissionMethod:
+      type: object
+      properties:
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/Match"
+        reason:
+          anyOf:
+          - $ref: "#/components/schemas/Reason"
+          - type: "null"
+        score:
+          type:
+          - number
+          - "null"
+          format: double
+        stats:
+          type: object
+          additionalProperties: {}
+        status:
+          type: string
+          enum:
+          - pending
+          - ok
+          - failed
+      required:
+      - matches
+      - reason
+      - score
+      - stats
+      - status
+    Submissions:
+      type: object
+      properties:
+        submissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Submission"
+        total:
+          type: integer
+          format: int32
+      required:
+      - submissions
+      - total

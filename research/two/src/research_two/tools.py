@@ -34,6 +34,20 @@ class JPlagResult:
     wall_s: float          # весь контейнер: старт JVM, разбор, сравнение
 
 
+# Отчёт пишется во внутреннюю /tmp контейнера и копируется наружу одним
+# куском. Писать его прямо в смонтированную директорию Windows — это 70 с на
+# задачу из 70 решений при 1 с на само сравнение: JPlag пишет архив мелкими
+# порциями, а каждая запись через bind mount Docker Desktop дорогая.
+_JPLAG_SCRIPT = r"""
+java -jar /opt/jplag/jplag.jar --mode RUN /in -r /tmp/report "$@"
+rc=$?
+mkdir -p /out/report
+cp -r /tmp/report/. /out/report/ 2>/dev/null
+cp /tmp/report.jplag /out/ 2>/dev/null
+exit $rc
+"""
+
+
 def run_jplag(
     submissions: Path,
     out_dir: Path,
@@ -45,11 +59,12 @@ def run_jplag(
     started = time.perf_counter()
     result = containers.run(
         config.JPLAG_IMAGE,
-        ["/in", "-r", "/out/report", *args],
+        ["-c", _JPLAG_SCRIPT, "jplag", *args],
         mounts=[
             containers.Mount(submissions, "/in"),
             containers.Mount(out_dir, "/out", read_only=False),
         ],
+        entrypoint="sh",
         timeout=timeout,
         check=False,
     )
@@ -74,7 +89,8 @@ def run_jplag(
         info = json.loads(archive.read("runInformation.json"))
     return JPlagResult(
         rows=rows,
-        failed=[str(item) for item in info.get("failedSubmissions", [])],
+        failed=[str(item.get("submissionId", item)) if isinstance(item, dict) else str(item)
+                for item in info.get("failedSubmissions", [])],
         comparisons=int(info.get("totalComparisons", len(rows))),
         execution_ms=int(info.get("executionTime", 0)),
         wall_s=wall,

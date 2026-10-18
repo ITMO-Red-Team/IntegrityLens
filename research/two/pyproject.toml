@@ -3,7 +3,27 @@ name = "research-two"
 version = "0.1.0"
 description = "Эксперимент 2: эффективность structsim в сравнении с JPlag"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "structsim",
+    "numpy>=2.1",
+    "pandas>=2.2",
+    "scipy>=1.14",
+    "scikit-learn>=1.5",
+    "matplotlib>=3.9",
+]
+
+[project.scripts]
+doctor = "research_two.doctor:main"
+stage = "research_two.stages:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+# Метод берётся из репозитория, а не с PyPI: инструмент общий, эксперимент им
+# не владеет. Editable — чтобы правка в tools/structsim не требовала
+# переустановки; версия, на которой получены числа, фиксируется коммитом.
+[tool.uv.sources]
+structsim = { path = "../../tools/structsim", editable = true }
 
 [build-system]
 requires = ["hatchling"]

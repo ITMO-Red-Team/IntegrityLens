@@ -1,14 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { highlightLine, isLanguageSupported } from "./highlight";
+import { highlightLine } from "./highlight";
+import { highlightAlias, isSupportedLanguage, languageExtensions, languageLabel } from "./languages";
 
-describe("highlight", () => {
+describe("languages registry", () => {
   it("распознаёт java и неизвестные языки", () => {
-    expect(isLanguageSupported("java")).toBe(true);
-    expect(isLanguageSupported("JAVA")).toBe(true);
-    expect(isLanguageSupported("pascal")).toBe(false);
-    expect(isLanguageSupported(undefined)).toBe(false);
+    expect(isSupportedLanguage("java")).toBe(true);
+    expect(isSupportedLanguage("pascal")).toBe(false);
+    expect(isSupportedLanguage(undefined)).toBe(false);
   });
 
+  it("подсвечивает java, а неизвестные языки нет", () => {
+    expect(highlightAlias("java")).toBe("java");
+    expect(highlightAlias("pascal")).toBeNull();
+    expect(highlightAlias(undefined)).toBeNull();
+  });
+
+  it("возвращает подпись и расширения", () => {
+    expect(languageLabel("java")).toBe("Java");
+    expect(languageLabel("pascal")).toBe("pascal");
+    expect(languageExtensions("java")).toEqual([".java"]);
+  });
+});
+
+describe("highlight", () => {
   it("подсвечивает ключевое слово в HTML", () => {
     const html = highlightLine("public static void main(String[] args) {}", "java");
     expect(html).toBeTruthy();

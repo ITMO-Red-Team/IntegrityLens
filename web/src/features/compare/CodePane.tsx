@@ -3,6 +3,7 @@ import { useSource } from "../../api/hooks";
 import type { SubmissionInfo } from "../../api/types";
 import { OriginalName } from "../../components/ui";
 import { highlightLine } from "../../lib/highlight";
+import { highlightAlias } from "../../lib/languages";
 
 interface Props {
   side: "A" | "B";
@@ -16,7 +17,7 @@ export function CodePane({ side, submissionId, label, info }: Props) {
   const [highlighted, setHighlighted] = useState(true);
   const lines = useMemo(() => (src.data ?? "").replace(/\r\n/g, "\n").split("\n"), [src.data]);
   const language = info?.language;
-  const supported = highlightLine("", language) !== null;
+  const supported = highlightAlias(language) !== null;
 
   return (
     <div className="panel flex min-w-0 flex-col">

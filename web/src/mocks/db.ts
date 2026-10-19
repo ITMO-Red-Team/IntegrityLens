@@ -27,6 +27,7 @@ interface StoredSubmission {
 interface StoredBatch {
   id: string;
   title: string;
+  language: string;
   createdAt: string;
   submissions: StoredSubmission[];
   scores: Map<string, Record<Method, number>>;
@@ -51,7 +52,13 @@ export interface NewItem {
   code: string;
 }
 
-export function createBatch(title: string, items: NewItem[], processingMs = 0, fixedId?: string): Batch {
+export function createBatch(
+  title: string,
+  items: NewItem[],
+  processingMs = 0,
+  fixedId?: string,
+  language: string = "java",
+): Batch {
   const demo = !!fixedId;
   const id = fixedId ?? uuid(false);
   const sorted = [...items].sort((x, y) => x.originalName.localeCompare(y.originalName));
@@ -73,6 +80,7 @@ export function createBatch(title: string, items: NewItem[], processingMs = 0, f
   batches.set(id, {
     id,
     title,
+    language,
     createdAt: new Date(now).toISOString(),
     submissions: prepared.map((s) => ({ id: s.id, originalName: s.originalName, loc: s.code.split("\n").length, code: s.code })),
     scores,
@@ -114,7 +122,7 @@ export function getBatch(id: string): Batch | undefined {
         ? "done"
         : "failed";
   const n = b.submissions.length;
-  return { id: b.id, title: b.title, language: "java", status, createdAt: b.createdAt, submissionCount: n, pairCount: (n * (n - 1)) / 2, runs };
+  return { id: b.id, title: b.title, language: b.language, status, createdAt: b.createdAt, submissionCount: n, pairCount: (n * (n - 1)) / 2, runs };
 }
 
 export const listBatches = () =>
@@ -142,7 +150,7 @@ export function listSubmissions(batchId: string): Submission[] | undefined {
         .slice(0, 3);
       methods[m] = { status: "ok", score: matches[0]?.score ?? null, matches, stats: {}, reason: null };
     }
-    return { id: s.id, originalName: s.originalName, language: "java", loc: s.loc, methods };
+    return { id: s.id, originalName: s.originalName, language: b.language, loc: s.loc, methods };
   });
 }
 
@@ -168,7 +176,7 @@ export function getPair(id: string): PairDetail | undefined {
   if (!b || !a || !c || !b.scores.has(`${a}:${c}`)) return undefined;
   const info = (sid: string) => {
     const s = b.submissions.find((x) => x.id === sid)!;
-    return { originalName: s.originalName, language: "java", loc: s.loc };
+    return { originalName: s.originalName, language: b.language, loc: s.loc };
   };
   const fb = feedback.get(id) ?? null;
   return {
@@ -211,7 +219,7 @@ export function resetDb() {
   batches.clear();
   feedback.clear();
   seq = 0;
-  createBatch("hw4-demo", demoItems(), 0, DEMO_BATCH_ID);
+  createBatch("hw4-demo", demoItems(), 0, DEMO_BATCH_ID, "java");
 }
 
 resetDb();

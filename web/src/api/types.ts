@@ -19,7 +19,9 @@ export type FeedbackRequest = S["FeedbackRequest"];
 export type Decision = Feedback["decision"];
 export type ApiErrorBody = S["Error"];
 
-export type Language = "java";
+import type { Language } from "../lib/languages";
+
+export type { Language } from "../lib/languages";
 
 export interface NewBatchInput {
   language: Language;

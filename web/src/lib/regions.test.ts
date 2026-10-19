@@ -20,19 +20,20 @@ describe("pairedRegions", () => {
 });
 
 describe("buildRegions", () => {
-  it("без демо и без фрагментов не даёт участков", () => {
-    expect(buildRegions([])).toEqual([]);
+  it("при наличии фрагментов не добавляет демо-участки", () => {
+    // Реальные данные (фрагменты с бэка) рендерятся без демо-наложения.
+    const regions = buildRegions([frag]);
+    expect(regions.some((r) => r.id === "demo-web-A")).toBe(false);
+    expect(regions.some((r) => r.id === "demo-char-B")).toBe(false);
   });
 
-  it("добавляет демо-участки только при demo и наличии фрагментов", () => {
-    const regions = buildRegions([frag], { demo: true });
+  it("без фрагментов добавляет демо-участки (наглядная демонстрация)", () => {
+    const regions = buildRegions([]);
     const single = regions.find((r) => r.id === "demo-web-A");
     const charRange = regions.find((r) => r.id === "demo-char-B");
     expect(single?.reason).toBe("Совпадение с фрагментом из интернета");
     expect(charRange?.fromCol).toBe(5);
     expect(charRange?.toCol).toBe(28);
-    // без demo одиночных демо-участков нет
-    expect(buildRegions([frag]).some((r) => r.id === "demo-web-A")).toBe(false);
   });
 });
 

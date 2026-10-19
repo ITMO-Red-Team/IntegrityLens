@@ -65,6 +65,48 @@ class MockTest(unittest.TestCase):
         with self.assertRaises(Exception):
             validate_result(self.job, result)
 
+    def test_fragments_for_similar_sources(self):
+        # Две схожие работы (одинаковые строки с переименованными переменными)
+        # должны дать подозрительные фрагменты; несхожие — пустой список.
+        base = (
+            "public class Main {\n"
+            "    static List<Integer> bfs(List<List<Integer>> g, int s) {\n"
+            "        boolean[] seen = new boolean[g.size()];\n"
+            "        Deque<Integer> q = new ArrayDeque<>();\n"
+            "        List<Integer> res = new ArrayList<>();\n"
+            "        seen[s] = true;\n"
+            "        q.add(s);\n"
+            "        while (!q.isEmpty()) {\n"
+            "            int cur = q.poll();\n"
+            "            res.add(cur);\n"
+            "            for (int x : g.get(cur)) {\n"
+            "                if (!seen[x]) { seen[x] = true; q.add(x); }\n"
+            "            }\n"
+            "        }\n"
+            "        return res;\n"
+            "    }\n"
+            "}\n"
+        )
+        similar = base.replace("seen", "visited").replace("res", "order")
+        other = "class Different { void x() { int a = 1; } }"
+
+        # Перезаписываем две работы, остальные — в сторону.
+        for i in range(5):
+            sid = self.job["submissions"][i]["id"]
+            p = self.input / "submissions" / sid / "Main.java"
+            p.write_text(similar if i == 0 else (base if i == 1 else other))
+
+        result = self.execute()
+        # Пара (0,1) — схожая, у неё есть фрагменты.
+        s0 = self.job["submissions"][0]["id"]
+        s1 = self.job["submissions"][1]["id"]
+        pair = next(p for p in result["pairs"] if {p["a"], p["b"]} == {s0, s1})
+        self.assertTrue(pair["fragments"], "схожая пара должна иметь фрагменты")
+        for f in pair["fragments"]:
+            self.assertEqual(len(f["a"]), 2)
+            self.assertEqual(len(f["b"]), 2)
+        validate_result(self.job, result)
+
     def test_invalid_input(self):
         self.job["submissions"][0]["files"] = ["../../Main.java"]
         with self.assertRaises(InvalidInput):

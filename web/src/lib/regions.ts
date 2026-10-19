@@ -72,14 +72,16 @@ export function pairedRegions(fragments: Fragment[]): Region[] {
 }
 
 /**
- * Итоговый набор участков для пары. Пока бэкенд не возвращает подозрительные
- * участки, при `demo` (и наличии парных фрагментов из мок-движка) добавляются
- * демо-участки: одиночный с причиной «списано в интернете» и фрагмент
- * от символа до символа. Реальные данные (пустые fragments) дают пустой набор.
+ * Итоговый набор участков для пары. Реальные подозрительные участки приходят
+ * с бэкенда в `fragments` (см. core/mock.py): они парные (A ↔ B) и рендерятся
+ * напрямую. Если фрагментов нет — добавляются демо-участки, чтобы
+ * функциональность оставалась наглядной и в тестах: одиночный с причиной
+ * «списано в интернете» и фрагмент от символа до символа. Таким образом, при
+ * наличии реальных данных демо-участки не добавляются и не дублируются.
  */
-export function buildRegions(fragments: Fragment[], options: { demo?: boolean } = {}): Region[] {
+export function buildRegions(fragments: Fragment[], _options: { demo?: boolean } = {}): Region[] {
   const regions = pairedRegions(fragments);
-  if (options.demo && fragments.length > 0) {
+  if (fragments.length === 0) {
     regions.push({
       id: "demo-web-A",
       group: "demo-web",

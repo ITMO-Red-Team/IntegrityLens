@@ -69,13 +69,15 @@ describe("сценарий проверяющего end-to-end (на моках 
 
   it("сравнение: hover имеет приоритет над focus и не затемняет весь код", async () => {
     const user = userEvent.setup();
-    render(<App initialEntries={[queueUrl]} />);
-    const firstRow = within(await screen.findByRole("table")).getAllByRole("row")[1]!;
-    await user.click(firstRow);
-    await waitFor(() => expect(screen.getByTestId("pane-A")).toHaveTextContent(/boolean\[\] (visited|seen)/));
+    // Пара S-008 vs S-019 имеет несколько подозрительных участков (3 группы),
+    // что позволяет проверить приоритет hover над focus между разными группами.
+    const [aid, bid] = [demoSubmissionId("S-008"), demoSubmissionId("S-019")].sort();
+    const pairUrl = `/batches/${DEMO_BATCH_ID}/pairs/${DEMO_BATCH_ID}:${aid}:${bid}?method=jplag&threshold=45&k=5`;
+    render(<App initialEntries={[pairUrl]} />);
+    await waitFor(() => expect(screen.getByTestId("pane-A")).toHaveTextContent(/ArrayDeque|HashSet/));
 
     const regions = await screen.findAllByTestId("region");
-    // Берём два участка из разных групп (A и B одного фрагмента — одна группа).
+    // Берём два участка из разных групп.
     const first = regions[0]!;
     const firstGroup = first.getAttribute("data-group")!;
     const second = regions.find((r) => r.getAttribute("data-group") !== firstGroup)!;

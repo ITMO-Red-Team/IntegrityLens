@@ -55,7 +55,9 @@ export function ComparePage() {
   if (pairQ.error || !p) return <ErrorBox error={pairQ.error} retry={pairQ.refetch} />;
 
   const fragments = p.scores.jplag?.fragments ?? [];
-  const regions = buildRegions(fragments, { demo: true });
+  // Реальные подозрительные участки возвращает бэкенд (core/mock.py) в
+  // fragments. Без них участков нет — демо-режим больше не нужен.
+  const regions = buildRegions(fragments);
 
   // Градиент считается по объединению групп обеих панелей один раз, чтобы
   // одиночный участок (только слева или только справа) занимал собственный

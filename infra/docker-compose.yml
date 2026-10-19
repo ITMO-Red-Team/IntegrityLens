@@ -96,17 +96,17 @@ services:
       <<: *worker-env
       WORKER_METHOD: structsim
 
-    web:
-      build: 
-        context: ../web
-        args:
-          VITE_USE_MOCKS: "false"
-      ports:
-        - '${WEB_PORT:-3000}:80'
-      depends_on:
-        api:
-          condition: service_healthy
-      restart: unless-stopped
+  web:
+    build: 
+      context: ../web
+      args:
+        VITE_USE_MOCKS: "false"
+    ports:
+      - '${WEB_PORT:-3000}:80'
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres-data:

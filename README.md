@@ -13,8 +13,7 @@ docker compose -f infra/docker-compose.yml up --build -d
 ```
 
 Если Compose установлен отдельной программой, используйте `docker-compose` вместо `docker compose`.
-Первый запуск собирает в том числе MinIO из официальных исходников. В x86 VM на ARM-хосте первая
-компиляция может занять около 30 минут; последующие сборки используют кеш.
+MinIO и PostgreSQL 18.6 скачиваются готовыми образами; API и воркеры собираются локально.
 
 - Swagger UI: <http://localhost:8080/swagger-ui.html>
 - OpenAPI JSON: <http://localhost:8080/v3/api-docs>

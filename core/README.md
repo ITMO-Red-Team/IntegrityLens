@@ -1,12 +1,12 @@
 # core
 
-Ядро, как бы. В нем будут лежать:
+Файловый адаптер анализа. Сейчас реализован только [мок](CONTRACT.md#мок).
+[Контракт](CONTRACT.md) нужен для подключения настоящих методов.
 
-1. Конвеер baseline
-2. Конвеер нового метода структурного сходства
+```sh
+python -m core run --input input/ --output output/
+python -m unittest discover -s core/tests -v
+```
 
-Предполагается, что это будет Python модуль, который можно вызывать с указанием директории входящих данных и директорией выходящих данных.
-
-## Контракт
-
-Формат входящих данных и выходящих должен быть описан в `core/CONTRACT.md`.
+Зависимости: [worker/requirements.txt](../worker/requirements.txt).
+Python API: `core.run(input_dir, output_dir)`.

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["contract", "method", "methodVersion", "params", "submissions", "pairs", "warnings"],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {"const": "integritylens.core/1"},
+    "method": {"enum": ["jplag", "structsim"]},
+    "methodVersion": {"type": "string", "minLength": 1},
+    "params": {"type": "object"},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "submissions": {
+      "type": "array", "minItems": 5, "maxItems": 50,
+      "items": {
+        "type": "object", "required": ["id", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "status": {"enum": ["ok", "failed"]},
+          "score": {"$ref": "#/$defs/score"},
+          "reason": {"$ref": "#/$defs/reason"},
+          "stats": {"type": "object"},
+          "matches": {
+            "type": "array", "maxItems": 3,
+            "items": {
+              "type": "object", "required": ["with", "score"], "additionalProperties": false,
+              "properties": {
+                "with": {"$ref": "#/$defs/id"},
+                "score": {"type": "number", "minimum": 0, "maximum": 1},
+                "fragments": {
+                  "type": "array", "items": {
+                    "type": "object", "required": ["lines", "withLines"], "additionalProperties": false,
+                    "properties": {"lines": {"$ref": "#/$defs/lines"}, "withLines": {"$ref": "#/$defs/lines"}}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {"if": {"properties": {"status": {"const": "ok"}}}, "then": {"required": ["score", "matches", "stats"]},
+           "else": {"required": ["reason"]}}
+        ]
+      }
+    },
+    "pairs": {
+      "type": "array", "minItems": 10, "maxItems": 1225,
+      "items": {
+        "type": "object", "required": ["a", "b", "value"], "additionalProperties": false,
+        "properties": {
+          "a": {"$ref": "#/$defs/id"}, "b": {"$ref": "#/$defs/id"},
+          "value": {"$ref": "#/$defs/score"}, "details": {"type": "object"},
+          "reason": {"$ref": "#/$defs/reason"},
+          "fragments": {
+            "type": "array", "items": {
+              "type": "object", "required": ["a", "b"], "additionalProperties": false,
+              "properties": {"a": {"$ref": "#/$defs/lines"}, "b": {"$ref": "#/$defs/lines"}}
+            }
+          }
+        },
+        "allOf": [{"if": {"properties": {"value": {"type": "null"}}}, "then": {"required": ["reason"]}}]
+      }
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "format": "uuid"},
+    "score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "reason": {
+      "type": "object", "required": ["code"], "additionalProperties": false,
+      "properties": {"code": {"enum": ["NOT_PARSED", "NOT_APPLICABLE"]}, "message": {"type": "string"}}
+    },
+    "lines": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 1}}
+  }
+}

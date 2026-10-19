@@ -75,6 +75,40 @@
   .hljs-operator, .hljs-punctuation { color: var(--c-muted); }
   .hljs-emphasis { font-style: italic; }
   .hljs-strong { font-weight: 600; }
+
+  /* Подозрительные/схожие участки кода.
+     Обводка рисуется только по внешним границам региона: строки, следующие
+     друг за другом, не обводятся каждая отдельно. Стороны границ задаёт класс
+     edge-single/top/middle/bottom; толщину и цвет — CSS-переменные, которые
+     включает состояние hovered/focused. */
+  .region {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    pointer-events: auto;
+    mix-blend-mode: multiply;
+    transition: box-shadow 0.12s ease, background-color 0.12s ease;
+    /* Заливка градиентом задаётся инлайном через --region-bg (см. CodePane). */
+    background: var(--region-bg);
+    --edge-width: 0px;
+    --edge-color: transparent;
+  }
+  /* Внешние границы по сторонам в зависимости от позиции строки в регионе.
+     Левые/правые края рисуются на каждой строке и вертикально смыкаются,
+     верх — только на первой, низ — только на последней. Для одной строки —
+     полная рамка. */
+  .edge-single { border: var(--edge-width) solid var(--edge-color); }
+  .edge-top { border-top: var(--edge-width) solid var(--edge-color); border-left: var(--edge-width) solid var(--edge-color); border-right: var(--edge-width) solid var(--edge-color); }
+  .edge-middle { border-left: var(--edge-width) solid var(--edge-color); border-right: var(--edge-width) solid var(--edge-color); }
+  .edge-bottom { border-bottom: var(--edge-width) solid var(--edge-color); border-left: var(--edge-width) solid var(--edge-color); border-right: var(--edge-width) solid var(--edge-color); }
+  .region-active {
+    --region-bg: color-mix(in srgb, var(--c-accent) 50%, transparent);
+    --edge-width: 2px;
+    --edge-color: var(--c-accent);
+  }
+  @media (prefers-color-scheme: dark) {
+    .region { mix-blend-mode: screen; }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

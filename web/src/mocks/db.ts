@@ -2,6 +2,7 @@ import type {
   Batch,
   Decision,
   Feedback,
+  Fragment,
   Method,
   PairDetail,
   PairScore,
@@ -31,6 +32,7 @@ interface StoredBatch {
   createdAt: string;
   submissions: StoredSubmission[];
   scores: Map<string, Record<Method, number>>;
+  fragments: Map<string, Fragment[]>;
   doneAt: Record<Method, number>;
   startedAt: number;
 }
@@ -64,6 +66,7 @@ export function createBatch(
   const sorted = [...items].sort((x, y) => x.originalName.localeCompare(y.originalName));
   const prepared = sorted.map((it) => ({ ...it, id: uuid(demo), p: prepare(it.code, COURSE_TEMPLATE) }));
   const scores = new Map<string, Record<Method, number>>();
+  const fragments = new Map<string, Fragment[]>();
   for (let i = 0; i < prepared.length; i++)
     for (let j = i + 1; j < prepared.length; j++) {
       const [x, y] = [prepared[i]!, prepared[j]!].sort((u, v) => u.id.localeCompare(v.id)) as [
@@ -75,6 +78,11 @@ export function createBatch(
         jplag: round4(r.risk / 100),
         structsim: round4((r.signals.structure + r.signals.coverage) / 2),
       });
+      // Индексы строк движка — 0-based; контракт API — 1-based.
+      fragments.set(
+        `${x.id}:${y.id}`,
+        r.fragments.map((f) => ({ ...f, a: [f.a[0]! + 1, f.a[1]! + 1], b: [f.b[0]! + 1, f.b[1]! + 1] })),
+      );
     }
   const now = Date.now();
   batches.set(id, {
@@ -84,6 +92,7 @@ export function createBatch(
     createdAt: new Date(now).toISOString(),
     submissions: prepared.map((s) => ({ id: s.id, originalName: s.originalName, loc: s.code.split("\n").length, code: s.code })),
     scores,
+    fragments,
     doneAt: { jplag: now + processingMs * 0.6, structsim: now + processingMs },
     startedAt: now + Math.min(300, processingMs * 0.1),
   });
@@ -130,7 +139,12 @@ export const listBatches = () =>
 
 function pairScore(b: StoredBatch, m: Method, key: string): PairScore {
   if (runStatus(b, m) !== "done") return { value: null, details: {}, fragments: [], reason: NOT_FINISHED };
-  return { value: b.scores.get(key)?.[m] ?? null, details: {}, fragments: [], reason: null };
+  return {
+    value: b.scores.get(key)?.[m] ?? null,
+    details: {},
+    fragments: m === "jplag" ? b.fragments.get(key) ?? [] : [],
+    reason: null,
+  };
 }
 
 export function listSubmissions(batchId: string): Submission[] | undefined {

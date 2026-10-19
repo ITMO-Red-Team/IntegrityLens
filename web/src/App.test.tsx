@@ -43,9 +43,70 @@ describe("сценарий проверяющего end-to-end (на моках 
     await user.click(screen.getAllByRole("button", { name: "показать имя файла" })[0]!);
     expect(screen.getByText(/hw4\/\w+\/Main\.java/)).toBeInTheDocument();
 
+    // Кнопка переключения участков — слева от выбора пары.
+    const toggle = screen.getByRole("button", { name: "Скрыть подозрительные участки" });
+    const select = screen.getByRole("combobox", { name: "Выбрать пару" });
+    expect(toggle.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Клик по участку ставит его в фокус (подсветка region-active).
+    const region = (await screen.findAllByTestId("region"))[0]!;
+    const group = region.getAttribute("data-group")!;
+    await user.click(region);
+    await waitFor(() => {
+      const focused = screen.getAllByTestId("region").find((r) => r.getAttribute("data-group") === group);
+      expect(focused).toHaveClass("region-active");
+    });
+
     const title = screen.getByRole("heading", { level: 1 }).textContent;
     await user.click(screen.getByRole("button", { name: "Следующая пара" }));
     await waitFor(() => expect(screen.getByRole("heading", { level: 1 }).textContent).not.toBe(title));
+    // Фокус региона не должен переживать смену пары: ни один регион не активен.
+    await waitFor(() => {
+      const regions = screen.queryAllByTestId("region");
+      expect(regions.every((r) => !r.classList.contains("region-active"))).toBe(true);
+    });
+  });
+
+  it("сравнение: hover имеет приоритет над focus и не затемняет весь код", async () => {
+    const user = userEvent.setup();
+    render(<App initialEntries={[queueUrl]} />);
+    const firstRow = within(await screen.findByRole("table")).getAllByRole("row")[1]!;
+    await user.click(firstRow);
+    await waitFor(() => expect(screen.getByTestId("pane-A")).toHaveTextContent(/boolean\[\] (visited|seen)/));
+
+    const regions = await screen.findAllByTestId("region");
+    // Берём два участка из разных групп (A и B одного фрагмента — одна группа).
+    const first = regions[0]!;
+    const firstGroup = first.getAttribute("data-group")!;
+    const second = regions.find((r) => r.getAttribute("data-group") !== firstGroup)!;
+    expect(second).toBeDefined();
+
+    // Закрепляем первый блок.
+    await user.click(first);
+    await waitFor(() => expect(first).toHaveClass("region-active"));
+
+    // Наводим на блок другой группы — он становится активным, а первый — нет.
+    await user.hover(second);
+    await waitFor(() => {
+      expect(second).toHaveClass("region-active");
+      expect(first).not.toHaveClass("region-active");
+    });
+  });
+
+  it("сравнение: клик вне участка сбрасывает фокус", async () => {
+    const user = userEvent.setup();
+    render(<App initialEntries={[queueUrl]} />);
+    const firstRow = within(await screen.findByRole("table")).getAllByRole("row")[1]!;
+    await user.click(firstRow);
+    await waitFor(() => expect(screen.getByTestId("pane-A")).toHaveTextContent(/boolean\[\] (visited|seen)/));
+
+    const region = (await screen.findAllByTestId("region"))[0]!;
+    await user.click(region);
+    await waitFor(() => expect(region).toHaveClass("region-active"));
+
+    // Клик по коду вне участка (сама панель) сбрасывает фокус.
+    await user.click(screen.getByTestId("pane-A"));
+    await waitFor(() => expect(region).not.toHaveClass("region-active"));
   });
 
   it("загрузка: отклоняет не-zip до отправки", async () => {

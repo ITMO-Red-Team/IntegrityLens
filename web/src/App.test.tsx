@@ -159,4 +159,19 @@ describe("сценарий проверяющего end-to-end (на моках 
     expect(document.body.textContent).not.toMatch(/ivanov|petrov|sidorova/);
     expect(DEMO_CORPUS).toHaveLength(8);
   });
+
+  it("тема: тоггл переключает атрибут data-theme на <html>", async () => {
+    const user = userEvent.setup();
+    render(<App initialEntries={["/upload"]} />);
+    await screen.findByRole("heading", { name: "Загрузка архива с работами" });
+
+    const toggle = screen.getByRole("switch", { name: "Переключить тему" });
+    // Атрибут data-theme всегда присутствует (light или dark) — это
+    // переопределяет системную настройку и в светлой, и в тёмной теме.
+    const before = document.documentElement.getAttribute("data-theme");
+    await user.click(toggle);
+    const after = document.documentElement.getAttribute("data-theme");
+    expect(["light", "dark"]).toContain(after);
+    expect(after).not.toBe(before);
+  });
 });

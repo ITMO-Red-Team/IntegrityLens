@@ -8,8 +8,19 @@
   --c-f3: #3fa37a; --c-f3-bg: #dff3ea; --c-f4: #c46bd6; --c-f4-bg: #f6e6f9;
   --c-tmpl: #eceef2;
 }
+/* Тёмная тема: по системной настройке по умолчанию, или вручную через
+   атрибут data-theme="dark" на <html> (тоггл в шапке). */
+:root[data-theme="dark"] {
+  --c-bg: #0f141a; --c-surface: #161d26; --c-sunk: #111821; --c-ink: #e2e8ef; --c-muted: #93a0af; --c-line: #283240;
+  --c-accent: #7ea8ff; --c-accent-ink: #0c1420;
+  --c-high: #ff8a7d; --c-high-bg: #3a1c1a; --c-mid: #f2b45a; --c-mid-bg: #33260f; --c-low: #9cc3ad; --c-low-bg: #1a2a22;
+  --c-f1: #e2b13c; --c-f1-bg: #3a3017; --c-f2: #7ea8ff; --c-f2-bg: #1b2a47;
+  --c-f3: #58c192; --c-f3-bg: #173329; --c-f4: #d58ae3; --c-f4-bg: #352039;
+  --c-tmpl: #1c232d;
+  color-scheme: dark;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --c-bg: #0f141a; --c-surface: #161d26; --c-sunk: #111821; --c-ink: #e2e8ef; --c-muted: #93a0af; --c-line: #283240;
     --c-accent: #7ea8ff; --c-accent-ink: #0c1420;
     --c-high: #ff8a7d; --c-high-bg: #3a1c1a; --c-mid: #f2b45a; --c-mid-bg: #33260f; --c-low: #9cc3ad; --c-low-bg: #1a2a22;
@@ -106,9 +117,54 @@
     --edge-width: 2px;
     --edge-color: var(--c-accent);
   }
+  :root[data-theme="dark"] .region { mix-blend-mode: screen; }
   @media (prefers-color-scheme: dark) {
-    .region { mix-blend-mode: screen; }
+    :root:not([data-theme]) .region { mix-blend-mode: screen; }
   }
+
+  /* Переключатель темы */
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: var(--c-muted);
+  }
+  .theme-toggle-track {
+    display: inline-flex;
+    align-items: center;
+    width: 46px;
+    height: 24px;
+    border-radius: 999px;
+    padding: 2px;
+    background: var(--c-sunk);
+    border: 1px solid var(--c-line);
+    transition: background-color 0.25s ease;
+  }
+  .theme-toggle-thumb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--c-surface);
+    color: var(--c-mid);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    transform: translateX(0);
+    transition: transform 0.25s ease, color 0.25s ease;
+  }
+  .theme-toggle-thumb-dark {
+    transform: translateX(22px);
+    color: var(--c-f2);
+  }
+  .theme-toggle-icon {
+    width: 14px;
+    height: 14px;
+  }
+  .theme-toggle:hover .theme-toggle-thumb { color: var(--c-accent); }
 }
 
 @media (prefers-reduced-motion: reduce) {

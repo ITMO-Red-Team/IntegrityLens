@@ -1,0 +1,50 @@
+name: web
+
+on:
+  push:
+    paths: ["web/**", "api/openapi.yaml", ".github/workflows/web.yml"]
+  pull_request:
+    paths: ["web/**", "api/openapi.yaml", ".github/workflows/web.yml"]
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Типы фронта совпадают с api/openapi.yaml
+        run: |
+          npm run gen:api
+          git diff --exit-code src/api/schema.ts || (echo "Контракт api изменился: выполните npm run gen:api и закоммитьте src/api/schema.ts" && exit 1)
+
+      - name: Проверка типов
+        run: npm run typecheck
+
+      - name: Тесты (отчёт JUnit сохраняется как артефакт)
+        run: npm test -- --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml
+
+      - name: Сборка
+        run: npm run build
+
+      - name: Сборка Docker-образа
+        run: docker build -t integritylens-web:ci .
+
+      - name: Сохранить результаты тестов
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-test-reports
+          path: web/reports/

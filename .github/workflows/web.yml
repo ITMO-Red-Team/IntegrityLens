@@ -2,9 +2,9 @@ name: web
 
 on:
   push:
-    paths: ["web/**", "docs/openapi.yaml", ".github/workflows/web.yml"]
+    paths: ["web/**", "api/openapi.yaml", ".github/workflows/web.yml"]
   pull_request:
-    paths: ["web/**", "docs/openapi.yaml", ".github/workflows/web.yml"]
+    paths: ["web/**", "api/openapi.yaml", ".github/workflows/web.yml"]
 
 defaults:
   run:
@@ -24,6 +24,11 @@ jobs:
 
       - name: Установка зависимостей
         run: npm ci
+
+      - name: Типы фронта совпадают с api/openapi.yaml
+        run: |
+          npm run gen:api
+          git diff --exit-code src/api/schema.ts || (echo "Контракт api изменился: выполните npm run gen:api и закоммитьте src/api/schema.ts" && exit 1)
 
       - name: Проверка типов
         run: npm run typecheck

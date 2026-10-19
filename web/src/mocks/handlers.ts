@@ -1,34 +1,19 @@
 import { strFromU8, unzipSync } from "fflate";
 import { delay, http, HttpResponse } from "msw";
-import type { Decision, FeedbackInput } from "../api/types";
-import type { CorpusItem } from "./corpus";
+import type { Decision, FeedbackRequest } from "../api/types";
+import { MAX_ARCHIVE_BYTES, MAX_WORKS, MIN_WORKS } from "../lib/constants";
 import * as db from "./db";
-import { clusters } from "./engine";
 
-import { MAX_ARCHIVE_BYTES, MAX_ARCHIVE_MB, MAX_WORKS, MIN_WORKS } from "../lib/constants";
 const DECISIONS: Decision[] = ["confirmed", "acceptable", "false_positive"];
+const SKIP = /(^|\/)(__MACOSX\/|\.DS_Store$|Thumbs\.db$)/;
+const isTest = import.meta.env.MODE === "test";
 
-const latency = () => delay(import.meta.env.MODE === "test" ? 0 : 150);
-const error = (status: number, message: string) => HttpResponse.json({ message }, { status });
-
-async function readArchive(archive: File): Promise<CorpusItem[]> {
-  const entries = unzipSync(new Uint8Array(await archive.arrayBuffer()));
-  return Object.entries(entries)
-    .filter(([path]) => /\.java$/i.test(path) && !path.startsWith("__MACOSX/"))
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, bytes], i) => {
-      const n = String(i + 1).padStart(3, "0");
-      return {
-        id: `S-${n}`,
-        fileName: `work_${n}.java`,
-        submittedAt: new Date(archive.lastModified || Date.now()).toISOString(),
-        code: strFromU8(bytes),
-      };
-    });
-}
+const latency = () => delay(isTest ? 0 : 150);
+const error = (status: number, code: string, message: string, details: Record<string, unknown> = {}) =>
+  HttpResponse.json({ code, message, details }, { status });
+const notFound = () => error(404, "NOT_FOUND", "Объект не найден");
 
 export const handlers = [
-
   http.get("*/api/batches", async () => {
     await latency();
     return HttpResponse.json(db.listBatches());
@@ -38,54 +23,74 @@ export const handlers = [
     await latency();
     const fd = await request.formData();
     const archive = fd.get("archive");
-    if (!(archive instanceof File)) return error(400, "Прикрепите архив .zip");
-        if (archive.size > MAX_ARCHIVE_BYTES) return error(413, `Архив больше ${MAX_ARCHIVE_MB} МБ`);
+    const language = fd.get("language");
+    const title = String(fd.get("title") ?? "").trim();
+    if (!(archive instanceof File) || !language) return error(400, "VALIDATION_ERROR", "Некорректный запрос");
+    if (language !== "java") return error(400, "UNSUPPORTED_LANGUAGE", "В MVP поддерживается только Java");
+    if (archive.size > MAX_ARCHIVE_BYTES) return error(413, "ARCHIVE_TOO_LARGE", "Размер архива превышает 10 МиБ");
 
-    let items: CorpusItem[];
+    let entries: Record<string, Uint8Array>;
     try {
-      items = await readArchive(archive);
+      entries = unzipSync(new Uint8Array(await archive.arrayBuffer()));
     } catch {
-      return error(400, "Файл не похож на zip-архив");
+      return error(400, "NOT_A_ZIP", "Файл не является корректным ZIP-архивом");
     }
-      if (items.length < MIN_WORKS || items.length > MAX_WORKS)
-        return error(400, `В архиве файлов .java: ${items.length}. Нужно от ${MIN_WORKS} до ${MAX_WORKS}`);
+    const files = Object.entries(entries).filter(([path]) => !path.endsWith("/") && !SKIP.test(path));
+    const unsupported = files.map(([p]) => p).filter((p) => !p.endsWith(".java"));
+    if (unsupported.length)
+      return error(400, "UNSUPPORTED_FILES", "Допустимы только файлы .java", { files: unsupported.slice(0, 10) });
+    if (files.length < MIN_WORKS || files.length > MAX_WORKS)
+      return error(400, "FILE_COUNT_OUT_OF_RANGE", `Требуется от ${MIN_WORKS} до ${MAX_WORKS} работ`, {
+        found: files.length,
+        min: MIN_WORKS,
+        max: MAX_WORKS,
+      });
 
-    const assignment = archive.name.replace(/\.zip$/i, "");
-    const batch = db.createBatch({ course: "", assignment }, items, import.meta.env.MODE === "test" ? 0 : 2000);
+    const items = files.map(([originalName, bytes]) => ({ originalName, code: strFromU8(bytes) }));
+    const batch = db.createBatch(title || archive.name, items, isTest ? 0 : 3000);
     return HttpResponse.json(batch, { status: 202 });
   }),
 
   http.get("*/api/batches/:batchId", async ({ params }) => {
     await latency();
-    const b = db.currentBatch(String(params.batchId));
-    return b ? HttpResponse.json(b) : error(404, "Пакет не найден");
+    const b = db.getBatch(String(params.batchId));
+    return b ? HttpResponse.json(b) : notFound();
   }),
 
-  http.get("*/api/batches/:batchId/pairs", async ({ params, request }) => {
+  http.get("*/api/batches/:batchId/submissions", async ({ params }) => {
     await latency();
-    const id = String(params.batchId);
-    const pairs = db.listPairs(id);
-    const batch = db.currentBatch(id);
-    if (!pairs || !batch) return error(404, "Пакет не найден");
-    if (batch.status !== "done") return HttpResponse.json({ pairs: [], clusters: [], total: 0 });
-    const threshold = Number(new URL(request.url).searchParams.get("threshold") ?? 45);
-    return HttpResponse.json({
-      pairs,
-      clusters: clusters(batch.submissions.map((s) => s.id), pairs, threshold),
-      total: pairs.length,
-    });
+    const list = db.listSubmissions(String(params.batchId));
+    return list ? HttpResponse.json({ submissions: list, total: list.length }) : notFound();
   }),
+
+  http.get("*/api/submissions/:submissionId/source", async ({ params }) => {
+    await latency();
+    const text = db.getSource(String(params.submissionId));
+    return text === undefined
+      ? notFound()
+      : new HttpResponse(text, { headers: { "Content-Type": "text/plain;charset=UTF-8" } });
+  }),
+
+  http.get("*/api/batches/:batchId/pairs", async ({ params }) => {
+    await latency();
+    const pairs = db.listPairs(String(params.batchId));
+    return pairs ? HttpResponse.json({ pairs, total: pairs.length }) : notFound();
+  }),
+
   http.get("*/api/pairs/:pairId", async ({ params }) => {
     await latency();
     const p = db.getPair(String(params.pairId));
-    return p ? HttpResponse.json(p) : error(404, "Пара не найдена");
+    return p ? HttpResponse.json(p) : notFound();
   }),
+
   http.put("*/api/pairs/:pairId/feedback", async ({ params, request }) => {
     await latency();
     const id = String(params.pairId);
-    if (!db.hasPair(id)) return error(404, "Пара не найдена");
-    const body = (await request.json()) as Partial<FeedbackInput>;
-    if (!body.decision || !DECISIONS.includes(body.decision)) return error(400, "Выберите решение");
-    return HttpResponse.json(db.saveFeedback(id, { decision: body.decision, comment: (body.comment ?? "").slice(0, 2000) }));
+    if (!db.getPair(id)) return notFound();
+    const body = (await request.json()) as Partial<FeedbackRequest>;
+    if (!body.decision || !DECISIONS.includes(body.decision)) return error(400, "VALIDATION_ERROR", "Некорректный запрос");
+    return HttpResponse.json(db.saveFeedback(id, body.decision, (body.comment ?? "").slice(0, 10000)));
   }),
+
+  http.get("*/api/health", () => HttpResponse.json({ status: "UP" })),
 ];

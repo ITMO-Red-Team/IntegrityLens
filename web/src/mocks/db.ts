@@ -1,142 +1,217 @@
-import type { Batch, Feedback, PairDetail, PairSummary, Stage } from "../api/types";
-import { DEMO_BATCH_ID } from "../lib/constants";
+import type {
+  Batch,
+  Decision,
+  Feedback,
+  Method,
+  PairDetail,
+  PairScore,
+  PairSummary,
+  Reason,
+  Run,
+  Submission,
+} from "../api/types";
 import { COURSE_TEMPLATE, DEMO_CORPUS, type CorpusItem } from "./corpus";
-import { analyze, explain, prepare, type Prepared } from "./engine";
+import { analyze, prepare } from "./engine";
 
-type StoredPair = Omit<PairDetail, "rank" | "submissionA" | "submissionB" | "feedback" | "decision">;
+export const DEMO_BATCH_ID = "00000000-0000-4000-8000-000000000001";
+const METHODS: Method[] = ["jplag", "structsim"];
+const NOT_FINISHED: Reason = { code: "RUN_NOT_FINISHED", message: "Анализ ещё не завершён" };
 
-interface StoredBatch {
-  batch: Batch;
-  prepared: Map<string, Prepared>;
-  pairs: StoredPair[];
-  readyAt: number;
+interface StoredSubmission {
+  id: string;
+  originalName: string;
+  loc: number;
+  code: string;
 }
 
-const STAGE_NAMES = [
-  "Распаковка архива и псевдонимизация",
-  "Удаление шаблона курса, импортов и комментариев",
-  "Baseline: токенные 3-граммы",
-  "Структурное сходство (нормализованные 5-граммы)",
-  "Поиск фрагментов и risk score",
-];
+interface StoredBatch {
+  id: string;
+  title: string;
+  createdAt: string;
+  submissions: StoredSubmission[];
+  scores: Map<string, Record<Method, number>>;
+  doneAt: Record<Method, number>;
+  startedAt: number;
+}
 
 const batches = new Map<string, StoredBatch>();
 const feedback = new Map<string, Feedback>();
+let seq = 0;
 
-export const pairId = (batchId: string, a: string, b: string) => `${batchId}:${a}:${b}`;
+function uuid(demo: boolean) {
+  if (!demo && typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  seq += 1;
+  return `00000000-0000-4000-9000-${seq.toString(16).padStart(12, "0")}`;
+}
 
-export function createBatch(
-  meta: { id?: string; course: string; assignment: string },
-  items: CorpusItem[],
-  processingMs = 0,
-): Batch {
-  const id = meta.id ?? `b-${Date.now().toString(36)}`;
-  const prepared = new Map(items.map((s) => [s.id, prepare(s.code, COURSE_TEMPLATE)]));
-  const t0 = performance.now();
-  const pairs: StoredPair[] = [];
-  for (let i = 0; i < items.length; i++)
-    for (let j = i + 1; j < items.length; j++) {
-      const a = items[i]!;
-      const b = items[j]!;
-      const r = analyze(a.id, prepared.get(a.id)!, b.id, prepared.get(b.id)!);
-      pairs.push({
-        id: pairId(id, a.id, b.id),
-        batchId: id,
-        a: a.id,
-        b: b.id,
-        risk: r.risk,
-        signals: r.signals,
-        fragmentCount: r.fragments.length,
-        fragments: r.fragments,
-        renames: r.renames,
-        explanation: explain(r.signals, r.fragments.length),
+const round4 = (x: number) => Math.round(x * 10000) / 10000;
+
+export interface NewItem {
+  originalName: string;
+  code: string;
+}
+
+export function createBatch(title: string, items: NewItem[], processingMs = 0, fixedId?: string): Batch {
+  const demo = !!fixedId;
+  const id = fixedId ?? uuid(false);
+  const sorted = [...items].sort((x, y) => x.originalName.localeCompare(y.originalName));
+  const prepared = sorted.map((it) => ({ ...it, id: uuid(demo), p: prepare(it.code, COURSE_TEMPLATE) }));
+  const scores = new Map<string, Record<Method, number>>();
+  for (let i = 0; i < prepared.length; i++)
+    for (let j = i + 1; j < prepared.length; j++) {
+      const [x, y] = [prepared[i]!, prepared[j]!].sort((u, v) => u.id.localeCompare(v.id)) as [
+        (typeof prepared)[number],
+        (typeof prepared)[number],
+      ];
+      const r = analyze(x.id, x.p, y.id, y.p);
+      scores.set(`${x.id}:${y.id}`, {
+        jplag: round4(r.risk / 100),
+        structsim: round4((r.signals.structure + r.signals.coverage) / 2),
       });
     }
-  pairs.sort((x, y) => y.risk - x.risk);
-  const elapsed = performance.now() - t0;
-  const stages: Stage[] = STAGE_NAMES.map((name, k) => ({
-    name,
-    status: "done",
-    durationMs: +(elapsed * [0.1, 0.15, 0.2, 0.35, 0.2][k]!).toFixed(2),
-  }));
-  const batch: Batch = {
+  const now = Date.now();
+  batches.set(id, {
     id,
-    course: meta.course,
-    assignment: meta.assignment,
-    language: "java",
-    status: "done",
-    stages,
-    submissions: items.map((s) => ({
-      id: s.id,
-      fileName: s.fileName,
-      submittedAt: s.submittedAt,
-      loc: prepared.get(s.id)!.sig.length,
-    })),
-    pairCount: pairs.length,
-    createdAt: new Date().toISOString(),
-  };
-  batches.set(id, { batch, prepared, pairs, readyAt: Date.now() + processingMs });
-  return currentBatch(id)!;
+    title,
+    createdAt: new Date(now).toISOString(),
+    submissions: prepared.map((s) => ({ id: s.id, originalName: s.originalName, loc: s.code.split("\n").length, code: s.code })),
+    scores,
+    doneAt: { jplag: now + processingMs * 0.6, structsim: now + processingMs },
+    startedAt: now + Math.min(300, processingMs * 0.1),
+  });
+  return getBatch(id)!;
 }
 
-export function currentBatch(id: string): Batch | undefined {
-  const s = batches.get(id);
-  if (!s) return undefined;
-  const left = s.readyAt - Date.now();
-  if (left <= 0) return s.batch;
-  const total = Math.max(1, s.readyAt - new Date(s.batch.createdAt).getTime());
-  const doneCount = Math.floor((1 - left / total) * s.batch.stages.length);
-  return {
-    ...s.batch,
-    status: "processing",
-    stages: s.batch.stages.map((st, k) =>
-      k < doneCount ? st : { name: st.name, status: k === doneCount ? "running" : "pending" },
-    ),
-  };
+function runStatus(b: StoredBatch, m: Method): Run["status"] {
+  const now = Date.now();
+  if (now >= b.doneAt[m]) return "done";
+  return now >= b.startedAt ? "running" : "queued";
 }
 
-export const listBatches = () => [...batches.keys()].map((id) => currentBatch(id)!);
+export function getBatch(id: string): Batch | undefined {
+  const b = batches.get(id);
+  if (!b) return undefined;
+  const runs: Run[] = METHODS.map((m) => {
+    const status = runStatus(b, m);
+    const done = status === "done";
+    return {
+      method: m,
+      methodVersion: done ? "mock-web" : null,
+      status,
+      startedAt: status === "queued" ? null : new Date(b.startedAt).toISOString(),
+      finishedAt: done ? new Date(b.doneAt[m]).toISOString() : null,
+      parsed: done ? b.submissions.length : null,
+      failed: done ? 0 : null,
+      error: null,
+    };
+  });
+  const st = runs.map((r) => r.status);
+  const status: Batch["status"] = st.every((s) => s === "queued")
+    ? "queued"
+    : st.some((s) => s === "queued" || s === "running")
+      ? "processing"
+      : st.some((s) => s === "done")
+        ? "done"
+        : "failed";
+  const n = b.submissions.length;
+  return { id: b.id, title: b.title, language: "java", status, createdAt: b.createdAt, submissionCount: n, pairCount: (n * (n - 1)) / 2, runs };
+}
+
+export const listBatches = () =>
+  [...batches.values()].sort((x, y) => y.createdAt.localeCompare(x.createdAt)).map((b) => getBatch(b.id)!);
+
+function pairScore(b: StoredBatch, m: Method, key: string): PairScore {
+  if (runStatus(b, m) !== "done") return { value: null, details: {}, fragments: [], reason: NOT_FINISHED };
+  return { value: b.scores.get(key)?.[m] ?? null, details: {}, fragments: [], reason: null };
+}
+
+export function listSubmissions(batchId: string): Submission[] | undefined {
+  const b = batches.get(batchId);
+  if (!b) return undefined;
+  return b.submissions.map((s) => {
+    const methods: Submission["methods"] = {};
+    for (const m of METHODS) {
+      if (runStatus(b, m) !== "done") {
+        methods[m] = { status: "pending", score: null, matches: [], stats: {}, reason: NOT_FINISHED };
+        continue;
+      }
+      const matches = [...b.scores.entries()]
+        .filter(([k]) => k.split(":").includes(s.id))
+        .map(([k, v]) => ({ with: k.split(":").find((x) => x !== s.id)!, score: v[m], fragments: [] }))
+        .sort((x, y) => y.score - x.score)
+        .slice(0, 3);
+      methods[m] = { status: "ok", score: matches[0]?.score ?? null, matches, stats: {}, reason: null };
+    }
+    return { id: s.id, originalName: s.originalName, language: "java", loc: s.loc, methods };
+  });
+}
 
 export function listPairs(batchId: string): PairSummary[] | undefined {
-  const s = batches.get(batchId);
-  if (!s) return undefined;
-  return s.pairs.map((p) => ({
-    id: p.id,
-    a: p.a,
-    b: p.b,
-    risk: p.risk,
-    signals: p.signals,
-    fragmentCount: p.fragmentCount,
-    decision: feedback.get(p.id)?.decision ?? null,
-  }));
+  const b = batches.get(batchId);
+  if (!b) return undefined;
+  return [...b.scores.keys()].sort().map((key) => {
+    const [a, c] = key.split(":") as [string, string];
+    const id = `${batchId}:${key}`;
+    return {
+      id,
+      a,
+      b: c,
+      scores: { jplag: pairScore(b, "jplag", key), structsim: pairScore(b, "structsim", key) },
+      decision: feedback.get(id)?.decision ?? null,
+    };
+  });
 }
 
 export function getPair(id: string): PairDetail | undefined {
-  const batchId = id.split(":")[0]!;
-  const s = batches.get(batchId);
-  const idx = s?.pairs.findIndex((p) => p.id === id) ?? -1;
-  if (!s || idx < 0) return undefined;
-  const p = s.pairs[idx]!;
-  const sub = (sid: string) => ({
-    ...s.batch.submissions.find((x) => x.id === sid)!,
-    lines: s.prepared.get(sid)!.lines,
-  });
+  const [batchId, a, c] = id.split(":");
+  const b = batchId ? batches.get(batchId) : undefined;
+  if (!b || !a || !c || !b.scores.has(`${a}:${c}`)) return undefined;
+  const info = (sid: string) => {
+    const s = b.submissions.find((x) => x.id === sid)!;
+    return { originalName: s.originalName, language: "java", loc: s.loc };
+  };
   const fb = feedback.get(id) ?? null;
-  return { ...p, rank: idx + 1, submissionA: sub(p.a), submissionB: sub(p.b), feedback: fb, decision: fb?.decision ?? null };
+  return {
+    id,
+    batchId: b.id,
+    a,
+    b: c,
+    submissions: { [a]: info(a), [c]: info(c) },
+    scores: { jplag: pairScore(b, "jplag", `${a}:${c}`), structsim: pairScore(b, "structsim", `${a}:${c}`) },
+    decision: fb?.decision ?? null,
+    feedback: fb,
+  };
 }
 
-export function saveFeedback(id: string, input: Omit<Feedback, "updatedAt">): Feedback {
-  const fb: Feedback = { ...input, updatedAt: new Date().toISOString() };
+export function getSource(submissionId: string): string | undefined {
+  for (const b of batches.values()) {
+    const s = b.submissions.find((x) => x.id === submissionId);
+    if (s) return s.code;
+  }
+  return undefined;
+}
+
+export function saveFeedback(id: string, decision: Decision, comment: string): Feedback {
+  const fb: Feedback = { decision, comment, updatedAt: new Date().toISOString() };
   feedback.set(id, fb);
   return fb;
 }
 
-export const hasPair = (id: string) => !!getPair(id);
+const SURNAMES = ["ivanov", "petrov", "sidorova", "kuznetsov", "smirnova", "popov", "volkova", "sokolov"];
+export const demoItems = (): NewItem[] =>
+  DEMO_CORPUS.map((s: CorpusItem, i) => ({ originalName: `hw4/${SURNAMES[i]}/${s.fileName}`, code: s.code }));
+
+export function demoSubmissionId(corpusId: string): string {
+  const i = DEMO_CORPUS.findIndex((s) => s.id === corpusId);
+  const name = `hw4/${SURNAMES[i]}/${DEMO_CORPUS[i]!.fileName}`;
+  return batches.get(DEMO_BATCH_ID)!.submissions.find((s) => s.originalName === name)!.id;
+}
 
 export function resetDb() {
   batches.clear();
   feedback.clear();
-  createBatch({ id: DEMO_BATCH_ID, course: "Алгоритмы, поток 2", assignment: "ДЗ-4. Обход графа в ширину" }, DEMO_CORPUS);
+  seq = 0;
+  createBatch("hw4-demo", demoItems(), 0, DEMO_BATCH_ID);
 }
 
 resetDb();

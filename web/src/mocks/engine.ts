@@ -1,4 +1,19 @@
-import type { CodeLine, Fragment, Signals } from "../api/types";
+export interface CodeLine {
+  text: string;
+  kind: "code" | "blank" | "comment" | "template";
+}
+export interface Fragment {
+  index: number;
+  a: [number, number];
+  b: [number, number];
+  length: number;
+}
+export interface Signals {
+  baseline: number;
+  structure: number;
+  coverage: number;
+  embedding: number;
+}
 
 export const MIN_RUN = 3;
 export const WEIGHTS = { baseline: 0.1, structure: 0.45, coverage: 0.3, embedding: 0.15 } as const;

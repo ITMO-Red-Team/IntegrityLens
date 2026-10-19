@@ -8,6 +8,7 @@ import { sortPairs } from "../../lib/queue";
 import { buildRegions, groupColors } from "../../lib/regions";
 import { useQueueParams } from "../queue/QueuePage";
 import { CodePane } from "./CodePane";
+import { FeedbackPanel } from "./FeedbackPanel";
 
 export function CompareIndex() {
   const { batchId = "" } = useParams();
@@ -144,6 +145,8 @@ export function ComparePage() {
           onFocusGroup={setFocusedGroup}
         />
       </div>
+
+      <FeedbackPanel key={pairId} pairId={pairId} feedback={p.feedback} />
     </>
   );
 }

@@ -160,6 +160,60 @@ describe("сценарий проверяющего end-to-end (на моках 
     expect(DEMO_CORPUS).toHaveLength(8);
   });
 
+  it("отзыв: обязательный комментарий, предупреждение и сохранение", async () => {
+    const user = userEvent.setup();
+    render(<App initialEntries={[queueUrl]} />);
+    const firstRow = within(await screen.findByRole("table")).getAllByRole("row")[1]!;
+    await user.click(firstRow);
+    await waitFor(() => expect(screen.getByTestId("pane-A")).toHaveTextContent(/boolean\[\] (visited|seen)/));
+
+    const panel = screen.getByLabelText("Отзыв по паре");
+    const comment = within(panel).getByLabelText("Комментарий");
+    const saveBtn = within(panel).getByRole("button", { name: "Сохранить отзыв" });
+
+    // Без вердикта и комментария сохранить нельзя.
+    expect(saveBtn).toBeDisabled();
+
+    // Заполняем только комментарий — всё равно нельзя (нужен вердикт).
+    await user.type(comment, "Совпадение по алгоритму");
+    expect(saveBtn).toBeDisabled();
+
+    // Выбираем вердикт → можно сохранить, появляется предупреждение «не сохранено».
+    await user.click(within(panel).getByRole("button", { name: "Подтверждено" }));
+    expect(saveBtn).toBeEnabled();
+    expect(within(panel).getByRole("status")).toHaveTextContent("не сохранено");
+
+    // Сохраняем → предупреждение исчезает, появляется «сохранено».
+    await user.click(saveBtn);
+    await waitFor(() => expect(within(panel).getByRole("status")).toHaveTextContent("сохранено"));
+  });
+
+  it("отзыв: черновик не теряется при переходе между парами", async () => {
+    const user = userEvent.setup();
+    render(<App initialEntries={[queueUrl]} />);
+    const firstRow = within(await screen.findByRole("table")).getAllByRole("row")[1]!;
+    await user.click(firstRow);
+    await waitFor(() => expect(screen.getByTestId("pane-A")).toHaveTextContent(/boolean\[\] (visited|seen)/));
+
+    const panel = screen.getByLabelText("Отзыв по паре");
+    const commentField = within(panel).getByLabelText("Комментарий");
+    await user.clear(commentField);
+    await user.type(commentField, "набросок, не сохранён");
+
+    // Переключаемся на следующую пару и обратно.
+    await user.click(screen.getByRole("button", { name: "Следующая пара" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("pane-A")).not.toHaveTextContent(/boolean\[\] (visited|seen)/),
+    );
+    await user.click(screen.getByRole("button", { name: "Предыдущая пара" }));
+    await waitFor(() => expect(screen.getByTestId("pane-A")).toHaveTextContent(/boolean\[\] (visited|seen)/));
+
+    // Черновик комментария сохранился.
+    expect(within(screen.getByLabelText("Отзыв по паре")).getByLabelText("Комментарий")).toHaveValue(
+      "набросок, не сохранён",
+    );
+  });
+
   it("тема: тоггл переключает атрибут data-theme на <html>", async () => {
     const user = userEvent.setup();
     render(<App initialEntries={["/upload"]} />);

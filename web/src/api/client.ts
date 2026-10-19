@@ -1,53 +1,83 @@
-import type { Batch, Feedback, FeedbackInput, NewBatchInput, PairDetail, PairList } from "./types";
+import type {
+  ApiErrorBody,
+  Batch,
+  Feedback,
+  FeedbackRequest,
+  NewBatchInput,
+  PairDetail,
+  Pairs,
+  Submissions,
+} from "./types";
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) || "";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    public details: Record<string, unknown> = {},
+  ) {
     super(message);
   }
 }
 
-function url(path: string, query?: Record<string, string | number | undefined>) {
-  const u = new URL(`${BASE}/api${path}`, window.location.origin);
-  Object.entries(query ?? {}).forEach(([k, v]) => v !== undefined && u.searchParams.set(k, String(v)));
-  return u.toString();
+function url(path: string) {
+  return new URL(`${BASE}/api${path}`, window.location.origin).toString();
 }
 
-async function request<T>(input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, init);
-  if (!res.ok) {
-    let message = `Сервер ответил ${res.status}`;
-    try {
-      const body = (await res.json()) as { message?: string };
-      if (body.message) message = body.message;
-    } catch {
-      /* тело без JSON */
-    }
-    throw new ApiError(res.status, message);
+function humanMessage(body: ApiErrorBody): string {
+  const files = body.details?.files;
+  if (body.code === "UNSUPPORTED_FILES" && Array.isArray(files) && files.length) {
+    return `${body.message}: ${files.join(", ")}`;
   }
+  return body.message;
+}
+
+async function check(res: Response): Promise<Response> {
+  if (res.ok) return res;
+  let err = new ApiError(res.status, "HTTP_" + res.status, `Сервер ответил ${res.status}`);
+  try {
+    const body = (await res.json()) as ApiErrorBody;
+    if (body?.code) err = new ApiError(res.status, body.code, humanMessage(body), body.details ?? {});
+  } catch {
+  }
+  throw err;
+}
+
+async function json<T>(input: string, init?: RequestInit): Promise<T> {
+  const res = await check(await fetch(input, init));
   return (await res.json()) as T;
 }
 
-export const api = {
-  listBatches: () => request<Batch[]>(url("/batches")),
+const enc = encodeURIComponent;
 
-  getBatch: (id: string) => request<Batch>(url(`/batches/${encodeURIComponent(id)}`)),
+export const api = {
+  listBatches: () => json<Batch[]>(url("/batches")),
+
+  getBatch: (id: string) => json<Batch>(url(`/batches/${enc(id)}`)),
 
   createBatch: (input: NewBatchInput) => {
     const fd = new FormData();
-    fd.set("language", input.language);
     fd.set("archive", input.archive, input.archive.name);
-    return request<Batch>(url("/batches"), { method: "POST", body: fd });
+    fd.set("language", input.language);
+    if (input.title) fd.set("title", input.title);
+    return json<Batch>(url("/batches"), { method: "POST", body: fd });
   },
 
-  listPairs: (batchId: string, threshold: number) =>
-    request<PairList>(url(`/batches/${encodeURIComponent(batchId)}/pairs`, { threshold })),
+  listSubmissions: (batchId: string) => json<Submissions>(url(`/batches/${enc(batchId)}/submissions`)),
 
-  getPair: (pairId: string) => request<PairDetail>(url(`/pairs/${encodeURIComponent(pairId)}`)),
+  getSource: async (submissionId: string) => {
+    const res = await check(await fetch(url(`/submissions/${enc(submissionId)}/source`)));
+    return res.text();
+  },
 
-  saveFeedback: (pairId: string, input: FeedbackInput) =>
-    request<Feedback>(url(`/pairs/${encodeURIComponent(pairId)}/feedback`), {
+  listPairs: (batchId: string) => json<Pairs>(url(`/batches/${enc(batchId)}/pairs`)),
+
+  getPair: (pairId: string) => json<PairDetail>(url(`/pairs/${enc(pairId)}`)),
+
+  saveFeedback: (pairId: string, input: FeedbackRequest) =>
+    json<Feedback>(url(`/pairs/${enc(pairId)}/feedback`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),

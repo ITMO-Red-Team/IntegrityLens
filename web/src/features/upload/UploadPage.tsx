@@ -44,7 +44,8 @@ export function UploadPage() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!archive || create.isPending) return;
-    create.mutate({ language, archive }, { onSuccess: (batch) => navigate(`/batches/${batch.id}`) });
+    const title = archive.name.replace(/\.zip$/i, "");
+    create.mutate({ language, archive, title }, { onSuccess: (batch) => navigate(`/batches/${batch.id}`) });
   };
 
   return (

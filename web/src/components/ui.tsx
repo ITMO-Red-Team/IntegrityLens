@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { LEVEL_LABEL, riskLevel, type RiskLevel } from "../lib/queue";
 
 const pillCls: Record<RiskLevel, string> = {
@@ -72,5 +72,16 @@ export function Kpi({ label, value, hint }: { label: string; value: ReactNode; h
       <span className="font-display text-2xl font-semibold tabular-nums">{value}</span>
       {hint && <span className="text-muted">{hint}</span>}
     </div>
+  );
+}
+
+export function OriginalName({ name }: { name: string }) {
+  const [shown, setShown] = useState(false);
+  return shown ? (
+    <span className="font-mono text-muted">{name}</span>
+  ) : (
+    <button type="button" className="text-xs text-accent underline" onClick={() => setShown(true)}>
+      показать имя файла
+    </button>
   );
 }

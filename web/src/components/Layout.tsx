@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useParams } from "react-router-dom";
-import { DEMO_BATCH_ID } from "../lib/constants";
+import { useBatches } from "../api/hooks";
 
 const linkCls = ({ isActive }: { isActive: boolean }) =>
   `rounded-md border px-3 py-1.5 text-[13px] font-medium ${
@@ -7,7 +7,10 @@ const linkCls = ({ isActive }: { isActive: boolean }) =>
   }`;
 
 export function Layout() {
-  const { batchId = DEMO_BATCH_ID } = useParams();
+  const params = useParams();
+  const { data: batches } = useBatches();
+  const batchId = params.batchId ?? batches?.[0]?.id;
+
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 border-b border-line bg-surface">
@@ -25,19 +28,27 @@ export function Layout() {
               <NavLink to="/upload" className={linkCls}>
                 Пакет работ
               </NavLink>
-              <NavLink to={`/batches/${batchId}/queue`} className={linkCls}>
-                Очередь проверки
-              </NavLink>
-              <NavLink to={`/batches/${batchId}/pairs`} className={linkCls}>
-                Сравнение
-              </NavLink>
+              {batchId ? (
+                <>
+                  <NavLink to={`/batches/${batchId}/queue`} className={linkCls}>
+                    Очередь проверки
+                  </NavLink>
+                  <NavLink to={`/batches/${batchId}/pairs`} className={linkCls}>
+                    Сравнение
+                  </NavLink>
+                </>
+              ) : (
+                <span className="px-3 py-1.5 text-[13px] text-muted" title="Сначала загрузите архив">
+                  Очередь и сравнение появятся после загрузки
+                </span>
+              )}
             </nav>
           </div>
           <p className="flex gap-2.5 border-t border-dashed border-line py-2 text-[13px] text-muted">
             <span aria-hidden="true">ⓘ</span>
             <span>
-              <b className="font-semibold text-ink">Риск — не вердикт.</b> Система только ранжирует пары для ручной
-              проверки и показывает основания. Решение принимает проверяющий. Работы псевдонимизированы.
+              <b className="font-semibold text-ink">Оценка — не вердикт.</b> Система только ранжирует пары для ручной
+              проверки. Решение принимает проверяющий. Работы показаны под псевдонимами.
             </span>
           </p>
         </div>

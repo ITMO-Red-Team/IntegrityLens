@@ -1,0 +1,8 @@
+{
+  "jplag_failed": {},
+  "structsim_skipped": {},
+  "pairs_total": 911,
+  "pairs_scored_by_both": 911,
+  "pairs_missing_jplag": 0,
+  "pairs_missing_structsim": 0
+}

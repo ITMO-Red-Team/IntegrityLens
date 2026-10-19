@@ -1,0 +1,5 @@
+version,class,pairs,both,only_structsim,only_jplag,neither
+as-is,плагиат,186,103,7,19,57
+as-is,не плагиат,495,11,8,40,436
+template-free,плагиат,185,122,28,11,24
+template-free,не плагиат,494,15,12,11,456

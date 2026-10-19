@@ -1,0 +1,8 @@
+.git
+**/target
+**/__pycache__
+.venv
+.env
+research
+tools
+*.pdf

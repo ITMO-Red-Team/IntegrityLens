@@ -1,0 +1,16 @@
+# Окружение: восстанавливается из uv.lock одной командой `uv sync`.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Скачиваемое: jar JPlag и наборы данных. Версии и контрольные суммы прибиты
+# в src/research_one/fetch.py, восстанавливается `uv run python -m research_one.fetch`.
+/vendor/
+/data/
+# Dolos CLI: ставится `npm ci` по package-lock.json (тоже из fetch).
+/node_modules/
+
+# Промежуточные прогоны инструментов (деревья semgrep-core, отчёты JPlag).
+# В git лежат только итоговые таблицы и выводы в results/.
+/work/

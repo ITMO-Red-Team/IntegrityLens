@@ -2,3 +2,10 @@ node_modules/
 dist/
 reports/
 .env.local
+**/target/
+**/__pycache__/
+*.pyc
+.venv/
+.env
+.DS_Store
+.idea/

@@ -64,6 +64,17 @@
   .field { @apply rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-ink; }
   .th { @apply whitespace-nowrap border-b border-line px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted; }
   .td { @apply border-b border-line px-3 py-2.5 align-middle; }
+  /* Подсветка синтаксиса (highlight.js) */
+  .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-built_in, .hljs-type,
+  .hljs-name, .hljs-deletion { color: var(--c-high); }
+  .hljs-string, .hljs-attr, .hljs-template-tag, .hljs-addition { color: var(--c-low); }
+  .hljs-comment, .hljs-quote { color: var(--c-muted); font-style: italic; }
+  .hljs-number, .hljs-symbol, .hljs-bullet, .hljs-link, .hljs-meta { color: var(--c-mid); }
+  .hljs-title, .hljs-section, .hljs-function .hljs-title { color: var(--c-accent); }
+  .hljs-params, .hljs-variable, .hljs-template-variable { color: var(--c-ink); }
+  .hljs-operator, .hljs-punctuation { color: var(--c-muted); }
+  .hljs-emphasis { font-style: italic; }
+  .hljs-strong { font-weight: 600; }
 }
 
 @media (prefers-reduced-motion: reduce) {

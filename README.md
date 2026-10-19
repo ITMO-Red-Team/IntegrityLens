@@ -14,13 +14,25 @@ curl -F archive=@works.zip -F language=java -F title=lab3 http://localhost:8080/
 - [OpenAPI](http://localhost:8080/v3/api-docs)
 - [Healthcheck](http://localhost:8080/api/health)
 
+## Логи
+
 ```sh
 docker compose -f infra/docker-compose.yml logs -f api worker-jplag worker-structsim
+```
+
+## Shutdown
+
+С сохранением данных:
+
+```sh
 docker compose -f infra/docker-compose.yml down
 ```
 
-`down` сохраняет данные, `down -v` удаляет их. Для отдельной установки Compose замените
-`docker compose` на `docker-compose`.
+С удалением данных:
+
+```sh
+docker compose -f infra/docker-compose.yml down -v
+```
 
 [Настройки и проверки](infra/README.md) · [API](api/README.md) ·
 [Воркеры](worker/README.md) · [Контракт анализа](core/CONTRACT.md) · [Исследования](research/README.md)

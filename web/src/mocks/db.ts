@@ -2,6 +2,7 @@ import type {
   Batch,
   Decision,
   Feedback,
+  Fragment,
   Method,
   PairDetail,
   PairScore,
@@ -27,9 +28,11 @@ interface StoredSubmission {
 interface StoredBatch {
   id: string;
   title: string;
+  language: string;
   createdAt: string;
   submissions: StoredSubmission[];
   scores: Map<string, Record<Method, number>>;
+  fragments: Map<string, Fragment[]>;
   doneAt: Record<Method, number>;
   startedAt: number;
 }
@@ -51,12 +54,19 @@ export interface NewItem {
   code: string;
 }
 
-export function createBatch(title: string, items: NewItem[], processingMs = 0, fixedId?: string): Batch {
+export function createBatch(
+  title: string,
+  items: NewItem[],
+  processingMs = 0,
+  fixedId?: string,
+  language: string = "java",
+): Batch {
   const demo = !!fixedId;
   const id = fixedId ?? uuid(false);
   const sorted = [...items].sort((x, y) => x.originalName.localeCompare(y.originalName));
   const prepared = sorted.map((it) => ({ ...it, id: uuid(demo), p: prepare(it.code, COURSE_TEMPLATE) }));
   const scores = new Map<string, Record<Method, number>>();
+  const fragments = new Map<string, Fragment[]>();
   for (let i = 0; i < prepared.length; i++)
     for (let j = i + 1; j < prepared.length; j++) {
       const [x, y] = [prepared[i]!, prepared[j]!].sort((u, v) => u.id.localeCompare(v.id)) as [
@@ -68,14 +78,21 @@ export function createBatch(title: string, items: NewItem[], processingMs = 0, f
         jplag: round4(r.risk / 100),
         structsim: round4((r.signals.structure + r.signals.coverage) / 2),
       });
+      // Индексы строк движка — 0-based; контракт API — 1-based.
+      fragments.set(
+        `${x.id}:${y.id}`,
+        r.fragments.map((f) => ({ ...f, a: [f.a[0]! + 1, f.a[1]! + 1], b: [f.b[0]! + 1, f.b[1]! + 1] })),
+      );
     }
   const now = Date.now();
   batches.set(id, {
     id,
     title,
+    language,
     createdAt: new Date(now).toISOString(),
     submissions: prepared.map((s) => ({ id: s.id, originalName: s.originalName, loc: s.code.split("\n").length, code: s.code })),
     scores,
+    fragments,
     doneAt: { jplag: now + processingMs * 0.6, structsim: now + processingMs },
     startedAt: now + Math.min(300, processingMs * 0.1),
   });
@@ -114,7 +131,7 @@ export function getBatch(id: string): Batch | undefined {
         ? "done"
         : "failed";
   const n = b.submissions.length;
-  return { id: b.id, title: b.title, language: "java", status, createdAt: b.createdAt, submissionCount: n, pairCount: (n * (n - 1)) / 2, runs };
+  return { id: b.id, title: b.title, language: b.language, status, createdAt: b.createdAt, submissionCount: n, pairCount: (n * (n - 1)) / 2, runs };
 }
 
 export const listBatches = () =>
@@ -122,7 +139,12 @@ export const listBatches = () =>
 
 function pairScore(b: StoredBatch, m: Method, key: string): PairScore {
   if (runStatus(b, m) !== "done") return { value: null, details: {}, fragments: [], reason: NOT_FINISHED };
-  return { value: b.scores.get(key)?.[m] ?? null, details: {}, fragments: [], reason: null };
+  return {
+    value: b.scores.get(key)?.[m] ?? null,
+    details: {},
+    fragments: m === "jplag" ? b.fragments.get(key) ?? [] : [],
+    reason: null,
+  };
 }
 
 export function listSubmissions(batchId: string): Submission[] | undefined {
@@ -142,7 +164,7 @@ export function listSubmissions(batchId: string): Submission[] | undefined {
         .slice(0, 3);
       methods[m] = { status: "ok", score: matches[0]?.score ?? null, matches, stats: {}, reason: null };
     }
-    return { id: s.id, originalName: s.originalName, language: "java", loc: s.loc, methods };
+    return { id: s.id, originalName: s.originalName, language: b.language, loc: s.loc, methods };
   });
 }
 
@@ -168,7 +190,7 @@ export function getPair(id: string): PairDetail | undefined {
   if (!b || !a || !c || !b.scores.has(`${a}:${c}`)) return undefined;
   const info = (sid: string) => {
     const s = b.submissions.find((x) => x.id === sid)!;
-    return { originalName: s.originalName, language: "java", loc: s.loc };
+    return { originalName: s.originalName, language: b.language, loc: s.loc };
   };
   const fb = feedback.get(id) ?? null;
   return {
@@ -211,7 +233,7 @@ export function resetDb() {
   batches.clear();
   feedback.clear();
   seq = 0;
-  createBatch("hw4-demo", demoItems(), 0, DEMO_BATCH_ID);
+  createBatch("hw4-demo", demoItems(), 0, DEMO_BATCH_ID, "java");
 }
 
 resetDb();

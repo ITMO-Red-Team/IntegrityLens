@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useParams } from "react-router-dom";
 import { useBatches } from "../api/hooks";
+import { ThemeToggle } from "./ThemeToggle";
 
 const linkCls = ({ isActive }: { isActive: boolean }) =>
   `rounded-md border px-3 py-1.5 text-[13px] font-medium ${
@@ -43,6 +44,7 @@ export function Layout() {
                 </span>
               )}
             </nav>
+            <ThemeToggle />
           </div>
           <p className="flex gap-2.5 border-t border-dashed border-line py-2 text-[13px] text-muted">
             <span aria-hidden="true">ⓘ</span>

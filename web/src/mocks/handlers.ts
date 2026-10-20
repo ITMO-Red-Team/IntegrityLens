@@ -2,6 +2,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { delay, http, HttpResponse } from "msw";
 import type { Decision, FeedbackRequest } from "../api/types";
 import { MAX_ARCHIVE_BYTES, MAX_WORKS, MIN_WORKS } from "../lib/constants";
+import { isSupportedLanguage, languageExtensions } from "../lib/languages";
 import * as db from "./db";
 
 const DECISIONS: Decision[] = ["confirmed", "acceptable", "false_positive"];
@@ -26,9 +27,11 @@ export const handlers = [
     const language = fd.get("language");
     const title = String(fd.get("title") ?? "").trim();
     if (!(archive instanceof File) || !language) return error(400, "VALIDATION_ERROR", "Некорректный запрос");
-    if (language !== "java") return error(400, "UNSUPPORTED_LANGUAGE", "В MVP поддерживается только Java");
+    const lang = String(language);
+    if (!isSupportedLanguage(lang)) return error(400, "UNSUPPORTED_LANGUAGE", "Неизвестный язык");
     if (archive.size > MAX_ARCHIVE_BYTES) return error(413, "ARCHIVE_TOO_LARGE", "Размер архива превышает 10 МиБ");
 
+    const exts = languageExtensions(lang);
     let entries: Record<string, Uint8Array>;
     try {
       entries = unzipSync(new Uint8Array(await archive.arrayBuffer()));
@@ -36,9 +39,11 @@ export const handlers = [
       return error(400, "NOT_A_ZIP", "Файл не является корректным ZIP-архивом");
     }
     const files = Object.entries(entries).filter(([path]) => !path.endsWith("/") && !SKIP.test(path));
-    const unsupported = files.map(([p]) => p).filter((p) => !p.endsWith(".java"));
+    const unsupported = files
+      .map(([path]) => path)
+      .filter((path) => !exts.some((e) => path.toLowerCase().endsWith(e)));
     if (unsupported.length)
-      return error(400, "UNSUPPORTED_FILES", "Допустимы только файлы .java", { files: unsupported.slice(0, 10) });
+      return error(400, "UNSUPPORTED_FILES", `Допустимы только файлы ${exts.join(", ")}`, { files: unsupported.slice(0, 10) });
     if (files.length < MIN_WORKS || files.length > MAX_WORKS)
       return error(400, "FILE_COUNT_OUT_OF_RANGE", `Требуется от ${MIN_WORKS} до ${MAX_WORKS} работ`, {
         found: files.length,
@@ -47,7 +52,7 @@ export const handlers = [
       });
 
     const items = files.map(([originalName, bytes]) => ({ originalName, code: strFromU8(bytes) }));
-    const batch = db.createBatch(title || archive.name, items, isTest ? 0 : 3000);
+    const batch = db.createBatch(title || archive.name, items, isTest ? 0 : 3000, undefined, lang);
     return HttpResponse.json(batch, { status: 202 });
   }),
 

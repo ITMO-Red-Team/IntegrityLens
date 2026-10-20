@@ -13,13 +13,16 @@ export type PairSummary = S["PairSummary"];
 export type PairDetail = S["PairDetail"];
 export type PairScore = S["PairScore"];
 export type Pairs = S["Pairs"];
+export type Fragment = S["Fragment"];
 export type Reason = S["Reason"];
 export type Feedback = S["Feedback"];
 export type FeedbackRequest = S["FeedbackRequest"];
 export type Decision = Feedback["decision"];
 export type ApiErrorBody = S["Error"];
 
-export type Language = "java";
+import type { Language } from "../lib/languages";
+
+export type { Language } from "../lib/languages";
 
 export interface NewBatchInput {
   language: Language;

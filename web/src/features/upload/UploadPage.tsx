@@ -1,9 +1,9 @@
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateBatch } from "../../api/hooks";
-import type { Language } from "../../api/types";
 import { PageHeader } from "../../components/ui";
-import { LANGUAGES, MAX_ARCHIVE_BYTES, MAX_ARCHIVE_MB, MAX_WORKS, MIN_WORKS } from "../../lib/constants";
+import { MAX_ARCHIVE_BYTES, MAX_ARCHIVE_MB, MAX_WORKS, MIN_WORKS } from "../../lib/constants";
+import { LANGUAGES, type Language } from "../../lib/languages";
 
 function validateArchive(f: File): string | null {
   if (!/\.zip$/i.test(f.name)) return `${f.name}: нужен архив .zip`;
@@ -33,7 +33,8 @@ export function UploadPage() {
     create.reset();
   };
 
-  const ext = LANGUAGES.find((l) => l.value === language)?.ext ?? "";
+  const exts = LANGUAGES.find((l) => l.value === language)?.extensions ?? [];
+  const extHint = exts.join(", ");
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
@@ -93,7 +94,7 @@ export function UploadPage() {
             <>
               <p className="text-lg font-semibold">Перетащите архив .zip или нажмите, чтобы выбрать</p>
               <p className="text-muted">
-                Внутри — от {MIN_WORKS} до {MAX_WORKS} файлов {ext}, один файл на одну работу. До {MAX_ARCHIVE_MB} МБ.
+                Внутри — от {MIN_WORKS} до {MAX_WORKS} файлов {extHint}, один файл на одну работу. До {MAX_ARCHIVE_MB} МБ.
               </p>
             </>
           )}

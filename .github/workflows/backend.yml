@@ -2,9 +2,9 @@ name: Backend
 
 on:
   push:
-    paths: ['api/**', 'core/**', 'worker/**', 'infra/**', '.dockerignore', '.github/workflows/backend.yml']
+    paths: ['api/**', 'worker/**', 'infra/**', '.dockerignore', '.github/workflows/backend.yml']
   pull_request:
-    paths: ['api/**', 'core/**', 'worker/**', 'infra/**', '.dockerignore', '.github/workflows/backend.yml']
+    paths: ['api/**', 'worker/**', 'infra/**', '.dockerignore', '.github/workflows/backend.yml']
 
 jobs:
   backend:
@@ -24,7 +24,7 @@ jobs:
           cache-dependency-path: worker/requirements.txt
       - run: mvn -f api/pom.xml test -B
       - run: pip install -r worker/requirements.txt
-      - run: python -m unittest discover -s core/tests -v
+      - run: python -m unittest discover -s worker/core/tests -v
       - run: docker compose -p integritylens-ci -f infra/docker-compose.yml up --build -d --wait --wait-timeout 180
       - run: python infra/smoke_test.py
       - run: python infra/export_openapi.py --check

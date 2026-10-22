@@ -55,7 +55,7 @@ export function ComparePage() {
   if (pairQ.error || !p) return <ErrorBox error={pairQ.error} retry={pairQ.refetch} />;
 
   const fragments = p.scores.jplag?.fragments ?? [];
-  // Реальные подозрительные участки возвращает бэкенд (core/mock.py) в
+  // Реальные подозрительные участки возвращает бэкенд (worker/core/mock.py) в
   // fragments. Без них участков нет — демо-режим больше не нужен.
   const regions = buildRegions(fragments);
 

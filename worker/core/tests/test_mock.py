@@ -7,9 +7,9 @@ import unittest
 from pathlib import Path
 from uuid import uuid4
 
-from core import run
-from core.contract import CONTRACT, validate_result
-from core.mock import InvalidInput
+from worker.core import run
+from worker.core.contract import CONTRACT, validate_result
+from worker.core.mock import InvalidInput
 
 
 class MockTest(unittest.TestCase):
@@ -116,7 +116,7 @@ class MockTest(unittest.TestCase):
         for scenario, expected in (("tool_error", 1), ("invalid_input", 2), ("success", 0)):
             self.job["params"] = {"mockScenario": scenario}
             (self.input / "job.json").write_text(json.dumps(self.job))
-            process = subprocess.run([sys.executable, "-m", "core", "run", "--input", str(self.input),
+            process = subprocess.run([sys.executable, "-m", "worker.core", "run", "--input", str(self.input),
                                       "--output", str(self.root / "output")], capture_output=True, timeout=10)
             self.assertEqual(process.returncode, expected, process.stderr)
 

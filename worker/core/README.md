@@ -4,9 +4,9 @@
 [Контракт](CONTRACT.md) нужен для подключения настоящих методов.
 
 ```sh
-python -m core run --input input/ --output output/
-python -m unittest discover -s core/tests -v
+python -m worker.core run --input input/ --output output/
+python -m unittest discover -s worker/core/tests -v
 ```
 
-Зависимости: [worker/requirements.txt](../worker/requirements.txt).
-Python API: `core.run(input_dir, output_dir)`.
+Зависимости: [worker/requirements.txt](../requirements.txt).
+Python API: `worker.core.run(input_dir, output_dir)`.

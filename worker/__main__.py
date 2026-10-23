@@ -17,7 +17,7 @@ from botocore.config import Config
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from core.contract import CONTRACT, validate_result, validate_schema
+from worker.core.contract import CONTRACT, validate_result, validate_schema
 
 LOG = logging.getLogger("worker")
 
@@ -124,7 +124,7 @@ class Worker:
             validate_schema("job", job)
             (input_dir / "job.json").write_text(json.dumps(job), encoding="utf-8")
             with tempfile.TemporaryFile() as stderr:
-                process = subprocess.Popen([sys.executable, "-m", "core", "run", "--input", str(input_dir),
+                process = subprocess.Popen([sys.executable, "-m", "worker.core", "run", "--input", str(input_dir),
                                             "--output", str(output_dir)], stdout=subprocess.DEVNULL, stderr=stderr)
                 try:
                     deadline = time.monotonic() + self.timeout

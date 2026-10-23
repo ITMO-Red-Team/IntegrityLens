@@ -35,4 +35,4 @@ docker compose -f infra/docker-compose.yml down -v
 ```
 
 [Настройки и проверки](infra/README.md) · [API](api/README.md) ·
-[Воркеры](worker/README.md) · [Контракт анализа](core/CONTRACT.md) · [Исследования](research/README.md)
+[Воркеры](worker/README.md) · [Контракт анализа](worker/core/CONTRACT.md) · [Исследования](research/README.md)

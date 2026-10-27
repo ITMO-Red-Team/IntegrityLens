@@ -7,7 +7,7 @@ remote_dir=${2:-/opt/integritylens}
 [[ "$target" != -* && "$target" != *[[:space:]]* ]] || { echo 'Invalid SSH target' >&2; exit 1; }
 [[ "$remote_dir" =~ ^/[a-zA-Z0-9_/-]+$ && "$remote_dir" != / ]] || { echo 'Invalid remote directory' >&2; exit 1; }
 root=$(cd "$(dirname "$0")/.." && pwd)
-ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o ConnectionAttempts=5 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
 
 stage=$(ssh "${ssh_opts[@]}" "$target" "test -r '$remote_dir/.env' && docker compose version >/dev/null && mktemp -d '$remote_dir/upload.XXXXXXXX'")
 [[ "$stage" == "$remote_dir"/upload.* && "$stage" =~ ^/[a-zA-Z0-9_./-]+$ ]] || { echo 'Invalid staging directory' >&2; exit 1; }
@@ -15,7 +15,7 @@ rsync -az --delete \
   --exclude='.git/' --exclude='node_modules/' --exclude='target/' \
   --exclude='dist/' --exclude='__pycache__/' --exclude='.venv/' \
   --exclude='.env*' --exclude='reports/' --exclude='*.log' \
-  -e 'ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4' \
+  -e 'ssh -o BatchMode=yes -o ConnectTimeout=15 -o ConnectionAttempts=5 -o ServerAliveInterval=15 -o ServerAliveCountMax=4' \
   --include='/api/***' --include='/worker/***' --include='/web/***' \
   --include='/infra/***' --include='/.dockerignore' --exclude='*' \
   "$root/" "$target:$stage/"

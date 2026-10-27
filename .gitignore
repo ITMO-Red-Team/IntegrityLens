@@ -1,7 +1,7 @@
 node_modules/
 dist/
 reports/
-.env.local
+.env.*
 **/target/
 **/__pycache__/
 *.pyc

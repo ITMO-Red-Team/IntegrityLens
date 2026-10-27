@@ -62,7 +62,9 @@ services:
       dockerfile: api/Dockerfile
       args:
         JAVA_BUILD_OPTS: ${JAVA_BUILD_OPTS:-}
+        APT_MIRROR: ${APT_MIRROR:-}
     environment:
+      JAVA_TOOL_OPTIONS: ${API_JAVA_OPTS:-}
       DATABASE_URL: jdbc:postgresql://postgres:5432/integritylens
       POSTGRES_USER: ${POSTGRES_USER:-integritylens}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-integritylens-local}
@@ -70,7 +72,7 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-integritylens}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-integritylens-local}
     ports:
-      - '${API_PORT:-8080}:8080'
+      - '${API_BIND:-0.0.0.0}:${API_PORT:-8080}:8080'
     depends_on:
       postgres:
         condition: service_healthy

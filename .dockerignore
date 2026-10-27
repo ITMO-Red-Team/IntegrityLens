@@ -2,7 +2,7 @@
 **/target
 **/__pycache__
 .venv
-.env
+.env*
 research
 tools
 *.pdf

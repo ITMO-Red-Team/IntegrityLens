@@ -26,7 +26,7 @@ class JsonFormatter(logging.Formatter):
     def format(self, record):
         return json.dumps({"timestamp": self.formatTime(record), "level": record.levelname,
                            "message": record.getMessage(), "batchId": getattr(record, "batchId", None),
-                           "runId": getattr(record, "runId", None)})
+                           "runId": getattr(record, "runId", None), "timings": getattr(record, "timings", None)})
 
 
 class RunError(Exception):
@@ -47,6 +47,9 @@ class Worker:
         self.database = os.environ["DATABASE_URL"]
         self.worker_id = f"{socket.gethostname()}-{uuid4()}"
         self.bucket = os.getenv("S3_BUCKET", "integritylens")
+        self.engine = os.getenv("CORE_ENGINE", "real")
+        if self.engine not in ("real", "mock"):
+            raise ValueError("Unknown CORE_ENGINE")
         self.delay = float(os.getenv("MOCK_DELAY_SECONDS", "2"))
         self.scenario = os.getenv("MOCK_SCENARIO", "success")
         if self.scenario not in ("success", "partial", "fail_once", "tool_error", "invalid_input"):
@@ -96,7 +99,69 @@ class Worker:
                 lost.set()
                 return
 
+    def params(self, run):
+        """Параметры запуска. Сценарий мока — тоже параметр: по нему core выбирает мок."""
+        if self.engine != "mock":
+            return run["params"]
+        scenario = self.scenario
+        if scenario == "fail_once":
+            scenario = "tool_error" if run["attempts"] == 1 else "success"
+        return {**run["params"], "mockScenario": scenario, "delaySeconds": self.delay}
+
+    def download(self, submission, input_dir):
+        sid = str(submission["id"])
+        name = PurePosixPath(submission["original_name"]).name
+        destination = input_dir / "submissions" / sid / name
+        destination.parent.mkdir(parents=True)
+        response = self.s3.get_object(Bucket=self.bucket, Key=submission["storage_key"])
+        try:
+            destination.write_bytes(response["Body"].read())
+        finally:
+            response["Body"].close()
+        return {"id": sid, "language": submission["language"], "files": [name]}
+
+    def core_command(self, input_dir, output_dir):
+        return [sys.executable, "-m", "worker.core", "run", "--input", str(input_dir), "--output", str(output_dir)]
+
+    def run_core(self, input_dir, output_dir, lost):
+        # Своя группа процессов: у core есть дети (JVM, semgrep-core), и kill только
+        # самого core оставил бы их работать дальше без присмотра.
+        with tempfile.TemporaryFile() as stderr:
+            process = subprocess.Popen(self.core_command(input_dir, output_dir), stdout=subprocess.DEVNULL,
+                                       stderr=stderr, start_new_session=True)
+            try:
+                deadline = time.monotonic() + self.timeout
+                while True:
+                    try:
+                        process.wait(timeout=0.1)
+                        break
+                    except subprocess.TimeoutExpired:
+                        pass
+                    if lost.is_set() or self.stop.is_set():
+                        raise LeaseLost()
+                    if time.monotonic() >= deadline:
+                        raise RunError("Core timeout")
+            finally:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                process.wait()
+            if process.returncode != 0:
+                stderr.seek(-min(2000, stderr.seek(0, os.SEEK_END)), os.SEEK_END)
+                LOG.warning("Core failed: %s", stderr.read().decode("utf-8", "replace").strip())
+                raise RunError(f"Core exited with code {process.returncode}", process.returncode != 2)
+
     def execute(self, run, lost):
+        timings = {}
+        clock = time.perf_counter()
+
+        def lap(stage):
+            nonlocal clock
+            now = time.perf_counter()
+            timings[f"{stage}Ms"] = round((now - clock) * 1000, 1)
+            clock = now
+
         with tempfile.TemporaryDirectory(prefix="integritylens-") as folder:
             root = Path(folder)
             input_dir, output_dir = root / "input", root / "output"
@@ -104,59 +169,35 @@ class Worker:
             with self.connect() as db:
                 submissions = db.execute("select * from submissions where batch_id = %s order by id",
                                          (run["batch_id"],)).fetchall()
-            scenario = self.scenario
-            if scenario == "fail_once":
-                scenario = "tool_error" if run["attempts"] == 1 else "success"
-            job = {"contract": CONTRACT, "runId": str(run["id"]), "method": self.method,
-                   "params": {**run["params"], "mockScenario": scenario, "delaySeconds": self.delay},
-                   "submissions": []}
-            for submission in submissions:
-                sid = str(submission["id"])
-                name = PurePosixPath(submission["original_name"]).name
-                destination = input_dir / "submissions" / sid / name
-                destination.parent.mkdir(parents=True)
-                response = self.s3.get_object(Bucket=self.bucket, Key=submission["storage_key"])
-                try:
-                    destination.write_bytes(response["Body"].read())
-                finally:
-                    response["Body"].close()
-                job["submissions"].append({"id": sid, "language": submission["language"], "files": [name]})
+            job = {"contract": CONTRACT, "runId": str(run["id"]), "method": self.method, "params": self.params(run),
+                   "submissions": [self.download(submission, input_dir) for submission in submissions]}
             validate_schema("job", job)
             (input_dir / "job.json").write_text(json.dumps(job), encoding="utf-8")
-            with tempfile.TemporaryFile() as stderr:
-                process = subprocess.Popen([sys.executable, "-m", "worker.core", "run", "--input", str(input_dir),
-                                            "--output", str(output_dir)], stdout=subprocess.DEVNULL, stderr=stderr)
-                try:
-                    deadline = time.monotonic() + self.timeout
-                    while process.poll() is None:
-                        if lost.is_set() or self.stop.is_set():
-                            raise LeaseLost()
-                        if time.monotonic() >= deadline:
-                            raise RunError("Core timeout")
-                        time.sleep(0.2)
-                    if process.returncode != 0:
-                        raise RunError(f"Core exited with code {process.returncode}", process.returncode != 2)
-                finally:
-                    if process.poll() is None:
-                        process.kill()
-                    process.wait()
-            result = json.loads((output_dir / "result.json").read_text(encoding="utf-8"))
+            lap("download")
+            self.run_core(input_dir, output_dir, lost)
+            lap("core")
+            raw = (output_dir / "result.json").read_text(encoding="utf-8")
+            result = json.loads(raw)
             validate_result(job, result)
+            lap("validate")
             if lost.is_set():
                 raise LeaseLost()
             prefix = f"runs/{run['id']}/attempt-{run['attempts']}/"
             for artifact in output_dir.rglob("*"):
                 if artifact.is_file():
                     self.s3.upload_file(str(artifact), self.bucket, prefix + artifact.relative_to(output_dir).as_posix())
+            lap("upload")
             with self.connect() as db:
                 changed = db.execute("""
-                    update runs set status = 'done', result = %s, finished_at = now(),
+                    update runs set status = 'done', result = %s::jsonb, finished_at = now(),
                         method_version = %s, params = %s, artifacts_prefix = %s, error = null, locked_by = null
                     where id = %s and attempts = %s and locked_by = %s and status = 'running'
-                    """, (Jsonb(result), result["methodVersion"], Jsonb(result["params"]), prefix,
+                    """, (raw, result["methodVersion"], Jsonb(result["params"]), prefix,
                           run["id"], run["attempts"], self.worker_id)).rowcount
             if changed != 1:
                 raise LeaseLost()
+            lap("commit")
+            return timings
 
     def fail(self, run, error):
         retryable = error.retryable if isinstance(error, RunError) else True
@@ -176,8 +217,8 @@ class Worker:
         heartbeat.start()
         try:
             LOG.info("Run started", extra=fields)
-            self.execute(run, lost)
-            LOG.info("Run completed", extra=fields)
+            timings = self.execute(run, lost)
+            LOG.info("Run completed", extra={**fields, "timings": timings})
         except LeaseLost:
             LOG.warning("Run interrupted or lease lost", extra=fields)
         except Exception as error:

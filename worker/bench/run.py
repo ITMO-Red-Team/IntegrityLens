@@ -15,6 +15,8 @@ from worker.bench.measure import repeated
 
 STRUCTSIM_REFERENCE = {"STRUCTSIM_NATIVE": "off"}
 JPLAG_AOT = "-XX:AOTCache=/opt/jplag/aot/jplag.aot"
+# Эти замеры про сами методы: синтетика собрана из шаблонных функций и была бы стёрта почти вся.
+WHOLE = {"ignoreTemplates": False}
 
 
 def _method():
@@ -47,13 +49,13 @@ def before_after(args, write):
                           ("+ AOT-кэш", {"JPLAG_JVM_OPTS": f"{tiered} {JPLAG_AOT} {heap}"}),
                           ("+ только C1", {})]
     for name, env in configurations:
-        write(_method(), name, repeated(sources, _method(), args.repeats, env), files=len(sources))
+        write(_method(), name, repeated(sources, _method(), args.repeats, env, WHOLE), files=len(sources))
 
 
 def by_count(args, write):
     """Рост от числа работ."""
     for count in (5, 10, 15, 20, 30, 40, 50):
-        write(_method(), "работы", repeated(_sources(args, count), _method(), args.repeats), files=count)
+        write(_method(), "работы", repeated(_sources(args, count), _method(), args.repeats, params=WHOLE), files=count)
 
 
 def by_size(args, write):
@@ -66,17 +68,28 @@ def by_size(args, write):
     for lines in (100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600):
         if lines <= longest:
             sources = synthetic(args.count, lines)
-            write(_method(), "длина", repeated(sources, _method(), args.repeats), files=args.count, lines=lines)
+            write(_method(), "длина", repeated(sources, _method(), args.repeats, params=WHOLE), files=args.count, lines=lines)
 
 
 def single(args, write):
     """Один замер: чтобы сравнивать лимиты ядер, запускается с разным --cpus."""
-    write(_method(), "ядра", repeated(_sources(args, args.count), _method(), args.repeats), files=args.count)
+    write(_method(), "ядра", repeated(_sources(args, args.count), _method(), args.repeats, params=WHOLE), files=args.count)
 
 
-EXPERIMENTS = {"before_after": before_after, "by_count": by_count, "by_size": by_size, "single": single}
+def templates(args, write):
+    """Цена стирания шаблонов: на настоящих решениях и на длинных файлах."""
+    sources = _sources(args, args.count)
+    write(_method(), "без стирания", repeated(sources, _method(), args.repeats, params=WHOLE), files=len(sources))
+    write(_method(), "со стиранием", repeated(sources, _method(), args.repeats), files=len(sources))
+    for lines in (800, 6400):
+        sources = synthetic(10, lines)
+        write(_method(), "со стиранием, длина", repeated(sources, _method(), args.repeats), files=len(sources), lines=lines)
+
+
+EXPERIMENTS = {"before_after": before_after, "by_count": by_count, "by_size": by_size, "single": single,
+               "templates": templates}
 FIELDS = ["method", "setup", "files", "lines", "cpus", "wall_s", "cpu_s", "rss_mb", "pairs", "parseMs", "compareMs",
-          "jplagMs", "reportMs", "writeMs"]
+          "templatesMs", "jplagMs", "reportMs", "writeMs"]
 
 
 def main():

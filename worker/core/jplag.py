@@ -4,12 +4,15 @@
 строки. Архив режет пары по `-n` (tools/jplag/pitfalls.md, ловушка 1), поэтому `-n -1`
 и проверка, что пришли все пары.
 """
+import codecs
 import json
 import os
 import re
 import shlex
 import subprocess
+import tempfile
 import zipfile
+from pathlib import Path
 
 from .contract import InvalidInput
 from .engine import merged_params, positive_int, sources_of
@@ -25,6 +28,7 @@ NO_VERSION_CHECK = ["-Dhttps.proxyHost=127.0.0.1", "-Dhttps.proxyPort=9"]
 # С нескольких мегабайт исходников он уже нужен: см. замеры в worker/bench/README.md.
 C1_ONLY = ["-XX:TieredStopAtLevel=1"]
 C1_MAX_BYTES = 1024 * 1024
+ASCII = bytes(range(128))
 FAILURES = {
     "CANNOT_PARSE": "Файл не удалось разобрать",
     "TOO_SMALL": "Слишком мало токенов для сравнения",
@@ -39,14 +43,35 @@ LOGGED_FAILURES = (
 )
 
 
-def _command(input_dir, report, min_tokens, size):
+def _command(submissions, report, min_tokens, size):
     java = os.environ.get("JPLAG_JAVA", "java")
     jar = os.environ.get("JPLAG_JAR", "/opt/jplag/jplag.jar")
     options = shlex.split(os.environ.get("JPLAG_JVM_OPTS", ""))
     compiler = C1_ONLY if size <= C1_MAX_BYTES else []
-    return [java, *NO_VERSION_CHECK, *compiler, *options, "-jar", jar, "--mode", "RUN", str(input_dir / "submissions"),
+    return [java, *NO_VERSION_CHECK, *compiler, *options, "-jar", jar, "--mode", "RUN", str(submissions),
             "-l", "java", "-r", str(report), "--cluster-skip", "--overwrite", "--encoding", "UTF-8",
             "-n", "-1", "-t", str(min_tokens), "--log-level=WARN"]
+
+
+def _with_room(source):
+    """Исходник, на котором JPlag не упадёт: tools/jplag/pitfalls.md, ловушки 6 и 7.
+
+    Конец объявления JPlag считает как конец минус длина напечатанного инициализатора, а
+    javac печатает не-ASCII символ шестью знаками. У начала файла смещение уходит ниже нуля,
+    и работа считается неразобранной. Комментарий в первой строке сдвигает смещения, а строки
+    и токены от него не меняются. Метка порядка байтов javac недопустима, её нужно убрать.
+    """
+    if source.startswith(codecs.BOM_UTF8):
+        source = source[len(codecs.BOM_UTF8):]
+    room = 6 * len(source.translate(None, ASCII)) + 2 * len(source) + 4096
+    return b"/*" + b" " * room + b"*/" + source
+
+
+def _copy_with_room(sources, root):
+    for sid, path in sources.items():
+        copy = root / sid / path.name
+        copy.parent.mkdir()
+        copy.write_bytes(_with_room(path.read_bytes()))
 
 
 def _failures_from_log(log, ids, valid):
@@ -62,8 +87,8 @@ def _failures_from_log(log, ids, valid):
 
 
 def _lines(start, end):
-    # JPlag сам предупреждает о токенах, которые заканчиваются раньше, чем начинаются.
-    return sorted((start["line"], end["line"]))
+    # Конец бывает раньше начала, JPlag сам об этом предупреждает: см. _with_room.
+    return [start["line"], max(start["line"], end["line"])]
 
 
 def _pair(comparison, metric):
@@ -101,14 +126,16 @@ def _read_report(path, ids, metric):
 def analyze(job, input_dir, artifacts, watch):
     params = merged_params(job, DEFAULT_PARAMS)
     min_tokens = positive_int(params, "minTokens")
-    if params["metric"] not in METRICS:
+    if not isinstance(params["metric"], str) or params["metric"] not in METRICS:
         raise InvalidInput()
     sources = sources_of(job, input_dir)
     ids = list(sources)
     report = artifacts / "report"
     size = sum(path.stat().st_size for path in sources.values())
-    process = subprocess.run(_command(input_dir, report, min_tokens, size), stdin=subprocess.DEVNULL,
-                             capture_output=True, text=True, errors="replace")
+    with tempfile.TemporaryDirectory(prefix="jplag-") as folder:
+        _copy_with_room(sources, Path(folder))
+        process = subprocess.run(_command(folder, report, min_tokens, size), stdin=subprocess.DEVNULL,
+                                 capture_output=True, text=True, errors="replace")
     watch.lap("jplag")
     log = process.stdout + process.stderr
     too_few = NOT_ENOUGH.search(log)

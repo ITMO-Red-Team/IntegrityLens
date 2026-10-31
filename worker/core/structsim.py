@@ -23,6 +23,10 @@ STRUCTSIM_VERSION = "0.1.0"
 METHOD_VERSION = f"structsim-{STRUCTSIM_VERSION}+semgrep-{SEMGREP_VERSION}"
 DEFAULT_PARAMS = {"minTile": tiles.MIN_TILE_LENGTH}
 FILE_TIMEOUT_SECONDS = 120
+# Шаг 2 рекурсивно обходит дерево, а по умолчанию в Python глубина всего 1000: на этом падала
+# бы цепочка из 300 сложений или вложенность в 160 условий. Кадры Python лежат в куче, и стек
+# от такой глубины не страдает, а `json.loads` при слишком глубоком дереве сам сообщает об ошибке.
+RECURSION_LIMIT = 100_000
 
 
 class _NotParsed(Exception):
@@ -112,6 +116,7 @@ def analyze(job, input_dir, artifacts, watch):
     params = merged_params(job, DEFAULT_PARAMS)
     min_tile = positive_int(params, "minTile")
     threads = available_cpus()
+    sys.setrecursionlimit(RECURSION_LIMIT)
     programs, failed = _to_programs(sources_of(job, input_dir), threads)
     watch.lap("parse")
     ids = sorted(programs)

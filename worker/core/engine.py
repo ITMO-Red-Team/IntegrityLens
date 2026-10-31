@@ -67,7 +67,7 @@ def merged_params(job, defaults):
 
 def positive_int(params, name):
     value = params[name]
-    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+    if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value < 2 ** 31:
         raise InvalidInput()
     return value
 

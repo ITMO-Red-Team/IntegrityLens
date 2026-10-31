@@ -19,7 +19,7 @@ from .engine import run
 KNOWN = Path(__file__).parent / "known"
 # Имя файла → ID. Порядок ID совпадает с порядком в списке, поэтому пары читаются легко.
 IDS = {name: str(UUID(int=number + 1, version=4)) for number, name in
-       enumerate(("base", "broken", "other", "partial", "renamed", "tiny"))}
+       enumerate(("base", "broken", "other", "partial", "renamed", "russian", "tiny"))}
 # Число меток structsim на base.java: если поедет формат выгрузки Semgrep, оно изменится.
 BASE_LABELS = 119
 
@@ -49,7 +49,8 @@ def check(method):
     pairs = {(names[p["a"]], names[p["b"]]): p for p in result["pairs"]}
     assert len(pairs) == len(list(combinations(IDS, 2))), "не все пары"
     assert submissions["broken"]["status"] == "failed", "сломанный файл считается разобранным"
-    assert all(submissions[name]["status"] == "ok" for name in ("base", "renamed", "other", "partial")), submissions
+    assert all(submissions[name]["status"] == "ok" for name in ("base", "renamed", "other", "partial", "russian")), \
+        submissions
     assert pairs["base", "renamed"]["value"] == 1.0, pairs["base", "renamed"]
     assert pairs["base", "renamed"]["fragments"], "у переименованной копии нет совпавших кусков"
     assert pairs["base", "other"]["value"] < pairs["base", "partial"]["value"] < 1.0, "неверный порядок оценок"

@@ -111,7 +111,8 @@ class JplagTest(MethodCase):
 
     def test_invalid_params(self):
         self.rejects_unknown_params()
-        for params in ({"minTokens": 0}, {"minTokens": "9"}, {"metric": "median"}):
+        for params in ({"minTokens": 0}, {"minTokens": "9"}, {"minTokens": 2 ** 31}, {"metric": "median"},
+                       {"metric": ["max"]}):
             self.job["params"] = params
             with self.assertRaises(InvalidInput):
                 self.execute()
@@ -134,6 +135,25 @@ class JplagTest(MethodCase):
         self.add("base", "renamed", "other", "partial", "tiny")
         self.assertEqual(self.cli_exit_code(JPLAG_JAR="/nonexistent.jar"), 1)
 
+    def test_valid_java_that_breaks_jplag_positions_is_still_compared(self):
+        # На всех трёх JPlag как есть падает: tools/jplag/pitfalls.md, ловушки 6 и 7.
+        self.add("russian", "base", "other", "renamed", "partial")
+        table = "class A{int[] a={" + ",".join(map(str, range(1, 26))) + "};void f(){for(int i=0;i<a.length;i++){a[i]+=1;}}}"
+        bom = b"\xef\xbb\xbf" + (KNOWN / "base.java").read_bytes()
+        for sid, source in ((self.ids["other"][0], table.encode()), (self.ids["partial"][0], bom)):
+            (self.input / "submissions" / sid / "Main.java").write_bytes(source)
+        result = self.execute()
+        self.assertTrue(all(s["status"] == "ok" for s in result["submissions"]), result["submissions"])
+        # Метка порядка байтов не меняет токены: это та же программа, что и base.
+        self.assertEqual(self.pair(result, "base", "partial")["value"], 1.0)
+
+    def test_first_line_room_does_not_shift_lines(self):
+        self.add("base", "renamed", "other", "partial", "tiny")
+        fragments = self.pair(self.execute(), "base", "renamed")["fragments"]
+        length = len((KNOWN / "base.java").read_text().splitlines())
+        self.assertEqual(sorted(line for f in fragments for line in f["a"])[-1], length)
+        self.assertEqual(sorted(line for f in fragments for line in f["a"])[0], 1)
+
 
 @unittest.skipUnless(HAS_STRUCTSIM, "нет structsim или semgrep-core")
 class StructsimTest(MethodCase):
@@ -154,6 +174,18 @@ class StructsimTest(MethodCase):
         self.assertIn("contrastZ", self.pair(self.execute(), "base", "renamed")["details"])
         shutil.copy(KNOWN / "broken.java", self.input / "submissions" / self.ids["partial"][0] / "Main.java")
         self.assertNotIn("contrastZ", self.pair(self.execute(), "base", "renamed")["details"])
+
+    def test_deep_code_is_not_a_parse_failure(self):
+        # Настоящий код, на котором кончается стандартная глубина рекурсии Python.
+        chain = " + ".join(["1"] * 400)
+        nested = "if (x > 0) {" * 170 + "x++;" + "}" * 170
+        self.add("base", "renamed", "other", "partial", "tiny")
+        for name, body in (("base", f"int x = {chain};"), ("renamed", f"int x = 1; {nested}")):
+            source = f"class Main {{ void f() {{ {body} }} }}"
+            (self.input / "submissions" / self.ids[name][0] / "Main.java").write_text(source)
+        result = self.execute()
+        self.assertEqual(self.status(result, "base")["status"], "ok")
+        self.assertEqual(self.status(result, "renamed")["status"], "ok")
 
     def test_exact_copies_are_scored_too(self):
         self.add("base", "base", "other", "other", "partial")
@@ -182,9 +214,10 @@ class StructsimTest(MethodCase):
 
     def test_invalid_params(self):
         self.rejects_unknown_params()
-        self.job["params"] = {"minTile": 0}
-        with self.assertRaises(InvalidInput):
-            self.execute()
+        for params in ({"minTile": 0}, {"minTile": 2 ** 64}):
+            self.job["params"] = params
+            with self.assertRaises(InvalidInput):
+                self.execute()
 
     def test_broken_tool_is_retryable(self):
         self.add("base", "renamed", "other", "partial", "tiny")

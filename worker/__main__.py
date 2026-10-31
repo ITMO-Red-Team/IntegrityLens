@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -20,6 +21,8 @@ from psycopg.types.json import Jsonb
 from worker.core.contract import CONTRACT, validate_result, validate_schema
 
 LOG = logging.getLogger("worker")
+FILE_NAME = re.compile(r"[^/\\\0]+\.java")
+MAX_FILE_NAME_BYTES = 200
 
 
 class JsonFormatter(logging.Formatter):
@@ -113,7 +116,11 @@ class Worker:
 
     def download(self, submission, input_dir):
         sid = str(submission["id"])
+        # Исходное имя остаётся в API, а методам оно не важно, и из-за неудобного имени
+        # (`.java`, слишком длинное для файловой системы) не должен падать весь пакет.
         name = PurePosixPath(submission["original_name"]).name
+        if not FILE_NAME.fullmatch(name) or len(name.encode()) > MAX_FILE_NAME_BYTES:
+            name = "Main.java"
         destination = input_dir / "submissions" / sid / name
         destination.parent.mkdir(parents=True)
         response = self.s3.get_object(Bucket=self.bucket, Key=submission["storage_key"])
@@ -202,6 +209,15 @@ class Worker:
             lap("commit")
             return timings
 
+    def release(self, run):
+        """Остановка воркера — не вина задания: попытка не считается, и ждать аренду незачем."""
+        with self.connect() as db:
+            db.execute("""
+                update runs set status = 'queued', attempts = attempts - 1, started_at = null,
+                    locked_by = null, heartbeat_at = null
+                where id = %s and attempts = %s and locked_by = %s and status = 'running'
+                """, (run["id"], run["attempts"], self.worker_id))
+
     def fail(self, run, error):
         retryable = error.retryable if isinstance(error, RunError) else True
         message = str(error) if isinstance(error, RunError) else f"Worker operation failed ({type(error).__name__})"
@@ -223,6 +239,8 @@ class Worker:
             timings = self.execute(run, lost)
             LOG.info("Run completed", extra={**fields, "timings": timings})
         except LeaseLost:
+            if self.stop.is_set():
+                self.release(run)
             LOG.warning("Run interrupted or lease lost", extra=fields)
         except Exception as error:
             self.fail(run, error)

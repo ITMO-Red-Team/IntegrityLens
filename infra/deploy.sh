@@ -17,7 +17,7 @@ rsync -az --delete \
   --exclude='.env*' --exclude='reports/' --exclude='*.log' \
   -e 'ssh -o BatchMode=yes -o ConnectTimeout=15 -o ConnectionAttempts=5 -o ServerAliveInterval=15 -o ServerAliveCountMax=4' \
   --include='/api/***' --include='/worker/***' --include='/web/***' \
-  --include='/infra/***' --include='/.dockerignore' --exclude='*' \
+  --include='/infra/***' --include='/tools/***' --include='/.dockerignore' --exclude='*' \
   "$root/" "$target:$stage/"
 
 ssh "${ssh_opts[@]}" "$target" "bash -s -- '$remote_dir' '$stage'" <<'REMOTE'
@@ -33,7 +33,9 @@ cd "$1/app"
 compose=(docker compose --env-file "$1/.env" -f infra/docker-compose.yml)
 # Sequential builds keep peak memory low on a small VM.
 "${compose[@]}" build api
+"${compose[@]}" build minio-init
 "${compose[@]}" build worker-jplag
+"${compose[@]}" build worker-structsim
 "${compose[@]}" build web
 "${compose[@]}" up -d --wait --wait-timeout 240
 "${compose[@]}" ps

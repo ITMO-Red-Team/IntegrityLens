@@ -16,7 +16,7 @@ Tiling. Развивается с 1996 года, стандартный инст
 |---|---|
 | [how-it-works.md](how-it-works.md) | как устроен и как получается оценка: метка, общие куски, обе метрики, порог `-t` |
 | [usage.md](usage.md) | сборка образа, запуск, ключи, артефакты и их форматы |
-| [pitfalls.md](pitfalls.md) | семь проверенных ловушек |
+| [pitfalls.md](pitfalls.md) | восемь проверенных ловушек |
 | `jplag.Dockerfile` | образ `integritylens/jplag:6.3.0` на `eclipse-temurin:25-jdk` |
 
 ## Сборка

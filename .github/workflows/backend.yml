@@ -2,9 +2,9 @@ name: Backend
 
 on:
   push:
-    paths: ['api/**', 'worker/**', 'infra/**', '.dockerignore', '.github/workflows/backend.yml']
+    paths: ['api/**', 'worker/**', 'infra/**', 'tools/structsim/**', '.dockerignore', '.github/workflows/backend.yml']
   pull_request:
-    paths: ['api/**', 'worker/**', 'infra/**', '.dockerignore', '.github/workflows/backend.yml']
+    paths: ['api/**', 'worker/**', 'infra/**', 'tools/structsim/**', '.dockerignore', '.github/workflows/backend.yml']
 
 jobs:
   backend:
@@ -21,10 +21,15 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: worker/requirements.txt
+          cache-dependency-path: |
+            worker/requirements.txt
+            infra/requirements.txt
       - run: mvn -f api/pom.xml test -B
-      - run: pip install -r worker/requirements.txt
+      - run: pip install -r worker/requirements.txt -r infra/requirements.txt pytest -e tools/structsim
       - run: python -m unittest discover -s worker/core/tests -v
+      - run: cargo test --release --locked --manifest-path tools/structsim/native/Cargo.toml
+      - run: cargo build --release --locked --manifest-path tools/structsim/native/Cargo.toml
+      - run: python -m pytest tools/structsim/tests -c tools/structsim/pyproject.toml
       - run: docker compose -p integritylens-ci -f infra/docker-compose.yml up --build -d --wait --wait-timeout 180
       - run: python infra/smoke_test.py
       - run: python infra/export_openapi.py --check
@@ -32,6 +37,10 @@ jobs:
           docker compose -p integritylens-ci -f infra/docker-compose.yml stop worker-jplag worker-structsim
           docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-jplag \
             python -m unittest discover -s worker/tests -v
+          docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-jplag \
+            python -m unittest discover -s worker/core/tests -v
+          docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-structsim \
+            python -m unittest discover -s worker/core/tests -v
       - if: failure()
         run: docker compose -p integritylens-ci -f infra/docker-compose.yml logs --tail 100 api worker-jplag worker-structsim
       - if: always()

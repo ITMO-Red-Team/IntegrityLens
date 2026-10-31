@@ -55,6 +55,7 @@ class Worker:
         if self.scenario not in ("success", "partial", "fail_once", "tool_error", "invalid_input"):
             raise ValueError("Unknown MOCK_SCENARIO")
         self.timeout = float(os.getenv("CORE_TIMEOUT_SECONDS", "600"))
+        self.poll = float(os.getenv("QUEUE_POLL_SECONDS", "15"))
         self.stop = threading.Event()
         self.s3 = boto3.client("s3", endpoint_url=os.environ["S3_ENDPOINT"], region_name="us-east-1",
                                aws_access_key_id=os.environ["S3_ACCESS_KEY"],
@@ -65,24 +66,26 @@ class Worker:
     def connect(self):
         return psycopg.connect(self.database, autocommit=True, row_factory=dict_row, connect_timeout=5)
 
-    def claim(self):
-        with self.connect() as db:
-            db.execute("""
-                update runs set status = 'failed', finished_at = now(),
-                    error = 'Worker heartbeat expired after final attempt', locked_by = null
-                where method = %s and status = 'running' and attempts >= max_attempts
-                    and heartbeat_at < now() - interval '2 minutes'
-                """, (self.method,))
-            return db.execute("""
-                update runs set status = 'running', attempts = attempts + 1, locked_by = %s,
-                    started_at = now(), heartbeat_at = now(), finished_at = null, error = null
-                where id = (
-                    select id from runs where method = %s and attempts < max_attempts
-                        and (status = 'queued' or (status = 'running'
-                            and heartbeat_at < now() - interval '2 minutes'))
-                    order by created_at, id for update skip locked limit 1
-                ) returning *
-                """, (self.worker_id, self.method)).fetchone()
+    def claim(self, db=None):
+        if db is None:
+            with self.connect() as own:
+                return self.claim(own)
+        db.execute("""
+            update runs set status = 'failed', finished_at = now(),
+                error = 'Worker heartbeat expired after final attempt', locked_by = null
+            where method = %s and status = 'running' and attempts >= max_attempts
+                and heartbeat_at < now() - interval '2 minutes'
+            """, (self.method,))
+        return db.execute("""
+            update runs set status = 'running', attempts = attempts + 1, locked_by = %s,
+                started_at = now(), heartbeat_at = now(), finished_at = null, error = null
+            where id = (
+                select id from runs where method = %s and attempts < max_attempts
+                    and (status = 'queued' or (status = 'running'
+                        and heartbeat_at < now() - interval '2 minutes'))
+                order by created_at, id for update skip locked limit 1
+            ) returning *
+            """, (self.worker_id, self.method)).fetchone()
 
     def heartbeat(self, run, finished, lost):
         while not finished.wait(15):
@@ -228,14 +231,25 @@ class Worker:
             finished.set()
             heartbeat.join(timeout=10)
 
+    def wait_for_work(self, listener):
+        """Ждёт уведомление из БД. Опрос остаётся на случай истёкшей аренды и потери связи."""
+        deadline = time.monotonic() + self.poll
+        while not self.stop.is_set() and time.monotonic() < deadline:
+            # Короткий таймаут только затем, чтобы вовремя заметить остановку; в БД это не ходит.
+            for _ in listener.notifies(timeout=0.5, stop_after=1):
+                return
+
     def serve(self):
         while not self.stop.is_set():
             try:
-                run = self.claim()
-                if run:
-                    self.process(run)
-                else:
-                    self.stop.wait(2)
+                with self.connect() as listener:
+                    listener.execute(f"listen runs_{self.method}")
+                    while not self.stop.is_set():
+                        run = self.claim(listener)
+                        if run:
+                            self.process(run)
+                        else:
+                            self.wait_for_work(listener)
             except Exception as error:
                 LOG.error("Worker operation failed: %s", type(error).__name__)
                 self.stop.wait(2)

@@ -1,4 +1,5 @@
 import concurrent.futures
+import time
 import unittest
 from uuid import uuid4
 
@@ -51,6 +52,26 @@ class QueueTest(unittest.TestCase):
         self.first.fail(run, RunError("invalid input", False))
         self.assertEqual(self.row()["status"], "failed")
         self.assertEqual(self.row()["attempts"], 1)
+
+    def test_queued_run_notifies_its_method_only(self):
+        other = "structsim" if self.first.method == "jplag" else "jplag"
+        with self.first.connect() as listener, self.first.connect() as db:
+            listener.execute(f"listen runs_{self.first.method}")
+            listener.execute(f"listen runs_{other}")
+            db.execute("update runs set status = 'failed' where id = %s", (self.run_id,))
+            self.assertEqual(list(listener.notifies(timeout=0.2, stop_after=1)), [])
+            db.execute("update runs set status = 'queued' where id = %s", (self.run_id,))
+            notes = list(listener.notifies(timeout=5, stop_after=1))
+        self.assertEqual([(n.channel, n.payload) for n in notes], [(f"runs_{self.first.method}", str(self.run_id))])
+
+    def test_wait_for_work_returns_on_notification(self):
+        with self.first.connect() as listener, self.first.connect() as db:
+            listener.execute(f"listen runs_{self.first.method}")
+            self.first.poll = 30
+            db.execute("update runs set status = 'queued' where id = %s", (self.run_id,))
+            started = time.monotonic()
+            self.first.wait_for_work(listener)
+            self.assertLess(time.monotonic() - started, 5)
 
     def test_expired_final_attempt_becomes_failed(self):
         self.first.claim()

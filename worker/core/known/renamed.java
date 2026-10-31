@@ -5,10 +5,14 @@ import java.util.Scanner;
 public class Main {
     static long[] accumulate(int[] items) {
         long[] totals = new long[items.length + 1];
+        long factor = 1;
 
         for (int idx = 0; idx < items.length; idx++) {
             // накапливаем сумму
-            totals[idx + 1] = totals[idx] + items[idx];
+            if (items[idx] % 3 == 0) { factor += items[idx] / 3; }
+            else if (factor > 100) { factor = factor / 2 + 1; }
+            long extra = idx % 2 == 0 ? factor * 2 : -factor;
+            totals[idx + 1] = totals[idx] + items[idx] * factor + extra;
         }
         return totals;
     }

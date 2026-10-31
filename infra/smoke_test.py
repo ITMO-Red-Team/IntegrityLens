@@ -54,22 +54,22 @@ SUM_RENAMED = """        int sum = 0;
             }
         }
         return sum;"""
-SEARCH = """        int left = 0;
-        int right = values.length - 1;
-        while (left < right) {
-            int middle = (left + right) / 2;
-            if (values[middle] < limit) {
-                left = middle + 1;
-            } else {
-                right = middle;
+OTHER = """        int best = limit;
+        int current = 0;
+        for (int value : values) {
+            current = value % limit == 0 ? current + value : current / 2;
+            if (current > best && current % 3 != 1) {
+                best = current - limit;
+                continue;
             }
+            best ^= value << 1;
         }
-        return left;"""
+        return best * limit - current;"""
 
 
 def archive(marker):
     """Пять работ с известным ответом: Main1 — это Main0 с другими именами."""
-    bodies = [SUM, SUM_RENAMED, SEARCH, SEARCH.replace("middle", "mid"), SUM + "\n        // copy"]
+    bodies = [SUM, SUM_RENAMED, OTHER, OTHER.replace("current", "running"), SUM + "\n        // copy"]
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zipped:
         for i, body in enumerate(bodies):

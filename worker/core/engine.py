@@ -1,10 +1,14 @@
 import json
 import math
 import os
+import tempfile
 import time
 from pathlib import Path
 
+from . import template_filter
 from .contract import InvalidInput, validate_schema
+
+IGNORE_TEMPLATES = "ignoreTemplates"
 
 
 def available_cpus():
@@ -60,6 +64,7 @@ def sources_of(job, input_dir):
 
 def merged_params(job, defaults):
     """Параметры запуска. Неизвестный параметр нигде не применился бы, поэтому это ошибка."""
+    defaults = {**defaults, IGNORE_TEMPLATES: True}
     if not set(job["params"]) <= set(defaults):
         raise InvalidInput()
     return {**defaults, **job["params"]}
@@ -70,6 +75,29 @@ def positive_int(params, name):
     if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value < 2 ** 31:
         raise InvalidInput()
     return value
+
+
+def _without_templates(job, input_dir, artifacts, watch, analyze):
+    """Метод видит копию входа без шаблонных функций, а в ответе остаётся, что из него стёрто."""
+    with tempfile.TemporaryDirectory(prefix="core-") as folder:
+        stripped = template_filter.strip_all(sources_of(job, input_dir), Path(folder))
+        watch.lap("templates")
+        result = analyze(job, Path(folder), artifacts, watch)
+    result["methodVersion"] += f"+templates-{template_filter.version()}"
+    for pair in result["pairs"]:
+        if pair.get("fragments"):
+            pair["fragments"] = [{"a": a, "b": b} for fragment in pair["fragments"] for a, b in
+                                 template_filter.split_fragment(fragment["a"], fragment["b"],
+                                                                stripped[pair["a"]], stripped[pair["b"]])]
+    for submission in result["submissions"]:
+        if submission["status"] == "ok":
+            own = stripped[submission["id"]]
+            submission["stats"]["templateLines"] = own
+            for match in submission["matches"]:
+                match["fragments"] = [{"lines": lines, "withLines": other} for fragment in match["fragments"]
+                                      for lines, other in template_filter.split_fragment(
+                                          fragment["lines"], fragment["withLines"], own, stripped[match["with"]])]
+    return result
 
 
 def run(input_dir, output_dir):
@@ -83,10 +111,16 @@ def run(input_dir, output_dir):
         from .jplag import analyze
     else:
         from .structsim import analyze
+    ignore_templates = job["params"].get(IGNORE_TEMPLATES, True)
+    if not isinstance(ignore_templates, bool):
+        raise InvalidInput()
     artifacts = output_dir / "artifacts"
     artifacts.mkdir(parents=True, exist_ok=True)
     watch = Stopwatch()
-    result = analyze(job, input_dir, artifacts, watch)
+    if ignore_templates:
+        result = _without_templates(job, input_dir, artifacts, watch, analyze)
+    else:
+        result = analyze(job, input_dir, artifacts, watch)
     (output_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     watch.lap("write")
     (artifacts / "timings.json").write_text(json.dumps(watch.timings), encoding="utf-8")

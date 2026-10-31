@@ -84,6 +84,61 @@ class MethodCase(unittest.TestCase):
         with self.assertRaises(InvalidInput):
             self.execute()
         self.assertEqual(self.cli_exit_code(), 2)
+        for value in (1, "true", None):
+            self.job["params"] = {"ignoreTemplates": value}
+            with self.assertRaises(InvalidInput):
+                self.execute()
+
+    def templates_do_not_count(self):
+        """Две разные работы с общими алгоритмами: без шаблонов оценка ниже, а кусков на них нет."""
+        self.add("templated_first", "templated_second", "base", "other", "partial")
+        stripped = self.execute()
+        self.job["params"] = {"ignoreTemplates": False}
+        whole = self.execute()
+        self.assertEqual(stripped["params"]["ignoreTemplates"], True)
+        self.assertEqual(whole["params"]["ignoreTemplates"], False)
+        self.assertRegex(stripped["methodVersion"], r"\+templates-[0-9a-f]{8}$")
+        self.assertNotIn("+templates", whole["methodVersion"])
+        first, second = (self.status(stripped, name)["stats"]["templateLines"]
+                         for name in ("templated_first", "templated_second"))
+        self.assertTrue(first and second)
+        self.assertNotIn("templateLines", self.status(whole, "templated_first")["stats"])
+        pair = self.pair(stripped, "templated_first", "templated_second")
+        self.assertLess(pair["value"], self.pair(whole, "templated_first", "templated_second")["value"])
+        self.assertEqual(self.status(stripped, "base")["stats"]["templateLines"], [])
+        for fragment in pair["fragments"]:
+            ordered = (fragment["a"], fragment["b"])
+            if pair["a"] != self.ids["templated_first"][0]:
+                ordered = ordered[::-1]
+            for span, lines in zip(ordered, (first, second)):
+                self.assertTrue(all(span[1] < start or end < span[0] for start, end in lines), (span, lines))
+        match = next(m for m in self.status(stripped, "templated_first")["matches"]
+                     if m["with"] == self.ids["templated_second"][0])
+        for fragment in match["fragments"]:
+            self.assertTrue(all(fragment["lines"][1] < start or end < fragment["lines"][0] for start, end in first))
+            self.assertTrue(all(fragment["withLines"][1] < start or end < fragment["withLines"][0] for start, end in second))
+        return stripped
+
+    def modern_java_survives_stripping(self):
+        """После стирания файл обязан разбираться: `record`, `switch`-выражения, константы с телом."""
+        self.add("modern", "base", "other", "partial", "renamed")
+        status = self.status(self.execute(), "modern")
+        self.assertEqual(status["status"], "ok", status)
+        self.assertTrue(status["stats"]["templateLines"])
+
+    def nothing_but_templates(self):
+        """Работа из одних шаблонов: сравнивать нечего, поэтому и оценки нет, а не 1.0 у двух таких работ."""
+        methods = (KNOWN / "templated_first.java").read_text()
+        methods = methods[methods.index("    static int lowerBound"):methods.index("    static int spiralWeight")]
+        self.add("templated_first", "templated_second", "base", "other", "partial")
+        for name in ("templated_first", "templated_second"):
+            (self.input / "submissions" / self.ids[name][0] / "Main.java").write_text(f"class Main {{\n{methods}}}\n")
+        result = self.execute()
+        self.assertEqual(self.status(result, "templated_first")["status"], "failed")
+        self.assertEqual(self.status(result, "templated_first")["reason"]["code"], "NOT_PARSED")
+        self.assertIsNone(self.pair(result, "templated_first", "templated_second")["value"])
+        self.job["params"] = {"ignoreTemplates": False}
+        self.assertEqual(self.pair(self.execute(), "templated_first", "templated_second")["value"], 1.0)
 
 
 @unittest.skipUnless(HAS_JPLAG, "нет JPlag")
@@ -147,12 +202,22 @@ class JplagTest(MethodCase):
         # Метка порядка байтов не меняет токены: это та же программа, что и base.
         self.assertEqual(self.pair(result, "base", "partial")["value"], 1.0)
 
+    def test_templates_do_not_count(self):
+        self.templates_do_not_count()
+
+    def test_nothing_but_templates(self):
+        self.nothing_but_templates()
+
+    def test_modern_java_survives_stripping(self):
+        self.modern_java_survives_stripping()
+
     def test_first_line_room_does_not_shift_lines(self):
         self.add("base", "renamed", "other", "partial", "tiny")
-        fragments = self.pair(self.execute(), "base", "renamed")["fragments"]
-        length = len((KNOWN / "base.java").read_text().splitlines())
-        self.assertEqual(sorted(line for f in fragments for line in f["a"])[-1], length)
-        self.assertEqual(sorted(line for f in fragments for line in f["a"])[0], 1)
+        pair = self.pair(self.execute(), "base", "renamed")
+        side = "a" if pair["a"] == self.ids["base"][0] else "b"
+        lines = sorted(line for fragment in pair["fragments"] for line in fragment[side])
+        self.assertEqual(lines[-1], len((KNOWN / "base.java").read_text().splitlines()))
+        self.assertEqual(lines[0], 1)
 
 
 @unittest.skipUnless(HAS_STRUCTSIM, "нет structsim или semgrep-core")
@@ -168,6 +233,21 @@ class StructsimTest(MethodCase):
         self.assertEqual({key: pair["details"][key] for key in ("order", "shingle", "blocks")},
                          {"order": 1.0, "shingle": 1.0, "blocks": 1.0})
         self.assertEqual(self.status(result, "base")["stats"]["labels"], selfcheck.BASE_LABELS)
+
+    def test_templates_do_not_count(self):
+        self.templates_do_not_count()
+
+    def test_nothing_but_templates(self):
+        self.nothing_but_templates()
+
+    def test_modern_java_survives_stripping(self):
+        self.modern_java_survives_stripping()
+
+    def test_template_filter_works_with_reference_too(self):
+        self.add("templated_first", "templated_second", "base", "other", "partial")
+        with mock.patch.dict(os.environ, {"STRUCTSIM_NATIVE": "off"}):
+            slow = self.execute()
+        self.assertEqual(slow, self.execute())
 
     def test_contrast_needs_five_parsed_submissions(self):
         self.add("base", "renamed", "other", "partial", "partial")

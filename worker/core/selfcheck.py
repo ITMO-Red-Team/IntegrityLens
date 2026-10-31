@@ -19,9 +19,10 @@ from .engine import run
 KNOWN = Path(__file__).parent / "known"
 # Имя файла → ID. Порядок ID совпадает с порядком в списке, поэтому пары читаются легко.
 IDS = {name: str(UUID(int=number + 1, version=4)) for number, name in
-       enumerate(("base", "broken", "other", "partial", "renamed", "russian", "tiny"))}
+       enumerate(("base", "broken", "other", "partial", "renamed", "russian", "templated_first", "templated_second",
+                  "tiny"))}
 # Число меток structsim на base.java: если поедет формат выгрузки Semgrep, оно изменится.
-BASE_LABELS = 119
+BASE_LABELS = 172
 
 
 def _job(input_dir, method):
@@ -34,6 +35,16 @@ def _job(input_dir, method):
         job["submissions"].append({"id": sid, "language": "java", "files": ["Main.java"]})
     (input_dir / "job.json").write_text(json.dumps(job), encoding="utf-8")
     return job
+
+
+def _check_templates(submissions, pairs):
+    """Набор шаблонов на месте и работает: стёртое не входит в совпавшие куски."""
+    first, second = (submissions[name]["stats"]["templateLines"] for name in ("templated_first", "templated_second"))
+    assert first and second, "шаблонные функции не найдены"
+    assert not submissions["base"]["stats"]["templateLines"], "своя функция принята за шаблон"
+    for fragment in pairs["templated_first", "templated_second"]["fragments"]:
+        for side, lines in ((fragment["a"], first), (fragment["b"], second)):
+            assert all(side[1] < start or end < side[0] for start, end in lines), (fragment, lines)
 
 
 def check(method):
@@ -56,6 +67,7 @@ def check(method):
     assert pairs["base", "other"]["value"] < pairs["base", "partial"]["value"] < 1.0, "неверный порядок оценок"
     assert all(line >= 1 for f in pairs["base", "renamed"]["fragments"] for line in f["a"] + f["b"])
     assert pairs["base", "broken"]["value"] is None and pairs["base", "broken"]["reason"]["code"] == "NOT_PARSED"
+    _check_templates(submissions, pairs)
     if method == "structsim":
         assert submissions["base"]["stats"]["labels"] == BASE_LABELS, submissions["base"]["stats"]
     else:

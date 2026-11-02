@@ -22,8 +22,8 @@ RUN cp /etc/apt/sources.list.d/ubuntu.sources /tmp/ubuntu.sources.original \
       sed -i "s|http://archive.ubuntu.com/ubuntu|$APT_MIRROR|g; s|http://security.ubuntu.com/ubuntu|$APT_MIRROR|g" /etc/apt/sources.list.d/ubuntu.sources; \
     fi \
     && install_curl() { \
-      apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=1 -o Acquire::http::Timeout=10 update \
-      && apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=10 install -y --no-install-recommends curl; \
+      apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update \
+      && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y --no-install-recommends curl; \
     } \
     && if ! install_curl; then \
       test -n "$APT_MIRROR" || exit 1; \

@@ -43,8 +43,9 @@ class CoreProcessTest(unittest.TestCase):
         from worker.__main__ import RunError
         self.worker.timeout = 0.5
         self.fake_core(f"sleep 60 & echo $! > {self.pid_file}; wait")
-        with self.assertRaises(RunError):
+        with self.assertRaises(RunError) as caught:
             self.worker.run_core("in", "out", self.lost)
+        self.assertFalse(caught.exception.retryable)
         self.assertTrue(self.child_is_gone())
 
     def test_lost_lease_kills_children_of_core(self):
@@ -60,9 +61,27 @@ class CoreProcessTest(unittest.TestCase):
         for code, retryable in ((1, True), (2, False)):
             self.fake_core(f"echo boom >&2; exit {code}")
             with self.assertRaises(RunError) as caught, self.assertLogs("worker", "WARNING") as logs:
-                self.worker.run_core("in", "out", self.lost)
+                self.worker.run_core("in", "out", self.lost, {"batchId": "batch", "runId": "run"})
             self.assertEqual(caught.exception.retryable, retryable)
             self.assertIn("boom", logs.output[0])
+            self.assertEqual(logs.records[0].runId, "run")
+
+    def test_stderr_of_a_successful_core_reaches_the_log(self):
+        self.fake_core("echo slow path >&2")
+        with self.assertLogs("worker", "INFO") as logs:
+            self.worker.run_core("in", "out", self.lost, {"batchId": "batch", "runId": "run"})
+        self.assertIn("slow path", logs.output[0])
+        self.assertEqual(logs.records[0].runId, "run")
+
+    def test_mock_params_from_the_queue_are_rejected(self):
+        from worker.__main__ import RunError
+        for name in ("mockScenario", "delaySeconds"):
+            with self.assertRaises(RunError) as caught:
+                self.worker.params({"params": {name: "success"}, "attempts": 1})
+            self.assertFalse(caught.exception.retryable)
+        self.assertEqual(self.worker.params({"params": {"minTokens": 5}, "attempts": 1}), {"minTokens": 5})
+        self.worker.engine = "mock"
+        self.assertEqual(self.worker.params({"params": {}, "attempts": 1})["mockScenario"], "success")
 
     def test_success_returns_quickly(self):
         self.fake_core("exit 0")

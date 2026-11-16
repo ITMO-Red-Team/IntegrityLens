@@ -1,0 +1,11 @@
+assignment_id,title,split,source_assignment_id,works,positive,plagiarism,ai,cases,origin
+a01,Parsa's Humongous Tree,dev,,50,14,12,2,5,conplag:version_1:problem-1
+a02,Menorah,test,,50,16,14,2,7,conplag:version_1:problem-4
+a03,Air Conditioners,dev,,50,14,12,2,6,conplag:version_1:problem-8
+a04,Phoenix and Towers,test,,50,16,14,2,7,conplag:version_1:problem-9
+a05,Interesting Story,dev,a05-prev,50,16,14,2,7,conplag:version_1:problem-15
+a05-prev,Interesting Story (прошлый поток),source,,25,0,0,0,0,conplag:version_1:problem-15
+a06,Minimum Grid Path,dev,,50,15,13,2,6,conplag:version_1:problem-18
+a07,Armchairs,test,a07-prev,50,16,14,2,7,conplag:version_1:problem-19
+a07-prev,Armchairs (прошлый поток),source,,25,0,0,0,0,conplag:version_1:problem-19
+a08,Monsters And Spells,test,,35,10,8,2,4,conplag:version_1:problem-21

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import template_filter
 from .contract import InvalidInput, validate_schema
+from .result import flipped, same_side
 
 IGNORE_TEMPLATES = "ignoreTemplates"
 
@@ -30,8 +31,8 @@ def available_cpus():
 
 
 class Stopwatch:
-    """Время этапов запуска. Попадает в артефакты: в `result.json` ему нельзя,
-    результат должен воспроизводиться."""
+    """Время этапов. У core оно попадает в артефакты: в `result.json` ему нельзя,
+    результат должен воспроизводиться. У воркера — в журнал."""
 
     def __init__(self):
         self.timings = {}
@@ -84,19 +85,20 @@ def _without_templates(job, input_dir, artifacts, watch, analyze):
         watch.lap("templates")
         result = analyze(job, Path(folder), artifacts, watch)
     result["methodVersion"] += f"+templates-{template_filter.version()}"
+    # Куски режутся один раз, у пары; совпадения работы берут их оттуда же, откуда и до стирания.
+    fragments = {}
     for pair in result["pairs"]:
-        if pair.get("fragments"):
-            pair["fragments"] = [{"a": a, "b": b} for fragment in pair["fragments"] for a, b in
-                                 template_filter.split_fragment(fragment["a"], fragment["b"],
-                                                                stripped[pair["a"]], stripped[pair["b"]])]
+        if "fragments" in pair:
+            pair["fragments"] = fragments[pair["a"], pair["b"]] = [
+                {"a": a, "b": b} for fragment in pair["fragments"] for a, b in
+                template_filter.split_fragment(fragment["a"], fragment["b"], stripped[pair["a"]], stripped[pair["b"]])]
     for submission in result["submissions"]:
         if submission["status"] == "ok":
-            own = stripped[submission["id"]]
-            submission["stats"]["templateLines"] = own
+            sid = submission["id"]
+            submission["stats"]["templateLines"] = stripped[sid]
             for match in submission["matches"]:
-                match["fragments"] = [{"lines": lines, "withLines": other} for fragment in match["fragments"]
-                                      for lines, other in template_filter.split_fragment(
-                                          fragment["lines"], fragment["withLines"], own, stripped[match["with"]])]
+                other = match["with"]
+                match["fragments"] = same_side(fragments[sid, other]) if sid < other else flipped(fragments[other, sid])
     return result
 
 

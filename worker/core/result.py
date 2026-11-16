@@ -3,11 +3,11 @@ from itertools import combinations
 from .contract import CONTRACT
 
 
-def _flipped(fragments):
+def flipped(fragments):
     return [{"lines": f["b"], "withLines": f["a"]} for f in fragments]
 
 
-def _same_side(fragments):
+def same_side(fragments):
     return [{"lines": f["a"], "withLines": f["b"]} for f in fragments]
 
 
@@ -27,8 +27,8 @@ def assemble(job, version, params, scored, failed, stats, warnings=()):
             continue
         pair = scored[a, b]
         pairs.append({"a": a, "b": b, **pair})
-        matches[a].append({"with": b, "score": pair["value"], "fragments": _same_side(pair["fragments"])})
-        matches[b].append({"with": a, "score": pair["value"], "fragments": _flipped(pair["fragments"])})
+        matches[a].append({"with": b, "score": pair["value"], "fragments": same_side(pair["fragments"])})
+        matches[b].append({"with": a, "score": pair["value"], "fragments": flipped(pair["fragments"])})
     submissions = []
     for sid in ids:
         if sid in failed:

@@ -106,9 +106,27 @@ class MethodsTest(unittest.TestCase):
                                               "@Handles(Foo.class) void third() { }"])
 
     def test_enum_constant_with_a_body_is_not_erased(self):
-        source = "enum E { A(1) { }, B(2) { }; E(int x) { } }"
-        self.assertEqual(methods_of(source)[-1], "E(int x) { }")
-        self.assertNotIn("A(1) { }", methods_of(source))
+        # Последняя константа тоже: за ней `;`, а не запятая.
+        for source in ("enum E { A(1) { }, B(2) { }; E(int x) { } }", "enum E { A(1), B(2) { void own() { } }; E(int x) { } }",
+                       "enum E { A(1) { } ; E(int x) { } }"):
+            self.assertEqual(methods_of(source), ["E(int x) { }"])
+
+    def test_enum_inside_a_class_does_not_hide_later_methods(self):
+        source = "class A { enum E { X(1) { }; E(int x) { } } A(int x) { } enum F { Y, Z } void after() { } }"
+        self.assertEqual(methods_of(source), ["E(int x) { }", "A(int x) { }", "void after() { }"])
+
+    def test_records_are_classes(self):
+        source = """class A {
+            record Point(int x, int y) { Point { check(x); } int sum() { return x + y; } }
+            record Box<T>(T value) implements Shape { static <T> Box<T> of(T value) { return new Box<>(value); } }
+            void record(int record) { }
+            int after() { return 1; }
+        }
+        record Main(String[] args) { public static void main(String[] args) { } }"""
+        self.assertEqual(methods_of(source), ["int sum() { return x + y; }",
+                                              "static <T> Box<T> of(T value) { return new Box<>(value); }",
+                                              "void record(int record) { }", "int after() { return 1; }",
+                                              "public static void main(String[] args) { }"])
 
     def test_enums_are_classes(self):
         source = "enum E { A, B { void own() { } }, C(1); E() { } E(int x) { } int value() { return 1; } }"
@@ -151,6 +169,18 @@ class StripTest(unittest.TestCase):
         self.assertNotIn(b"lo <= hi", clean)
         self.assertIn(OWN_CODE.encode(), clean)
         self.assertIn(b"class Main", clean)
+
+    def test_record_keeps_its_own_code_and_main(self):
+        main = "public static void main(String[] args) { }"
+        source = f"record Main(int[] data) {{\n    {BINARY_SEARCH}\n\n    {OWN_CODE}\n\n    {main}\n}}\n".encode()
+        clean, lines = strip(source, self.index)
+        self.assertEqual(lines, [[2, 16]])
+        for kept in ("record Main(int[] data) {", OWN_CODE, main):
+            self.assertIn(kept.encode(), clean)
+
+    def test_enum_constants_survive_a_template_in_the_last_one(self):
+        source = f"enum E {{\n    A(1), B(2) {{\n    {BINARY_SEARCH}\n    }};\n    E(int x) {{ }}\n}}\n".encode()
+        self.assertEqual(strip(source, self.index), (source, []))
 
     def test_main_is_never_a_template(self):
         body = BINARY_SEARCH.replace("static int find", "public static void main")

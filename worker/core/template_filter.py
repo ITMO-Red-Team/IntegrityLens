@@ -65,6 +65,12 @@ def _closing(tokens, opening):
     return None
 
 
+def _declares_record(tokens, index):
+    """`record` — слово контекстное: объявление — это `record Имя(` или `record Имя<`."""
+    return (tokens[index][0] == b"record" and index + 2 < len(tokens) and tokens[index + 1][1] == "word"
+            and tokens[index + 2][0] in (b"(", b"<"))
+
+
 def _methods(tokens):
     """Методы и конструкторы как `(первый токен, последний токен)`, на любой вложенности классов.
 
@@ -73,13 +79,19 @@ def _methods(tokens):
     """
     found = []
     start = index = parens = 0
-    declares_type = assigns = throws = False
+    declared = None
+    assigns = throws = False
+    # По элементу на открытый тип: True, пока идут константы перечисления. Константа с телом
+    # выглядит как конструктор, но это не метод: вместе с ней стёрлись бы и соседние константы.
+    constants = []
     while index < len(tokens):
         text, kind, _, _ = tokens[index]
         next_member = False
         if kind == "word":
             # `Foo.class` — это не объявление.
-            declares_type = declares_type or (text in _DECLARES_TYPE and tokens[index - 1][0] != b".")
+            if declared is None and (text in _DECLARES_TYPE and tokens[index - 1][0] != b"."
+                                     or _declares_record(tokens, index)):
+                declared = text
             throws = throws or text == b"throws"
         elif kind == "mark":
             if text == b"(":
@@ -88,11 +100,18 @@ def _methods(tokens):
                 parens -= 1
             elif text == b"=":
                 assigns = assigns or not parens
-            elif text in (b";", b"}"):
+            elif text == b";":
                 next_member = True
+                if constants and not parens:
+                    constants[-1] = False
+            elif text == b"}":
+                next_member = True
+                if constants:
+                    constants.pop()
             elif text == b"{":
-                if declares_type and not parens:
+                if declared and not parens:
                     next_member = True
+                    constants.append(declared == b"enum")
                 else:
                     closing = _closing(tokens, index)
                     if closing is None:
@@ -100,15 +119,15 @@ def _methods(tokens):
                     # Инициализатор поля и аргумент аннотации: само объявление идёт дальше.
                     if not assigns and not parens:
                         next_member = True
-                        # За константой перечисления с телом идёт запятая, стирать её нельзя.
-                        follows_comma = closing + 1 < len(tokens) and tokens[closing + 1][0] == b","
-                        if (throws or tokens[index - 1][0] == b")") and index > start and not follows_comma:
+                        is_constant = constants and constants[-1]
+                        if (throws or tokens[index - 1][0] == b")") and index > start and not is_constant:
                             found.append((start, closing))
                     index = closing
         if next_member:
             start = index + 1
             parens = 0
-            declares_type = assigns = throws = False
+            declared = None
+            assigns = throws = False
         index += 1
     return found
 

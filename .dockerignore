@@ -1,8 +1,9 @@
 .git
+.claude
 **/target
 **/__pycache__
-.venv
+**/.venv
 .env*
 research
-tools
+tools/*/tests
 *.pdf

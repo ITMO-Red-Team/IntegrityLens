@@ -1,0 +1,5 @@
+# Только ради бинарника semgrep-core: Python-часть Semgrep воркеру не нужна.
+# Хеши прибиты: формат выгрузки дерева меняется между версиями молча.
+semgrep==1.180.0 \
+    --hash=sha256:16db2e2706ab814a975eeec25debfad49abba846b7c513d88e041447152f8447 \
+    --hash=sha256:cba06f64b10e5ec86a0b3a9757cfdfdf3ce6c2bbdb5e98762aa2a4b0a296f8ca

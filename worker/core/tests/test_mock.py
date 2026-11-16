@@ -7,9 +7,8 @@ import unittest
 from pathlib import Path
 from uuid import uuid4
 
-from worker.core import run
-from worker.core.contract import CONTRACT, validate_result
-from worker.core.mock import InvalidInput
+from worker.core.contract import CONTRACT, InvalidInput, validate_result
+from worker.core.mock import run
 
 
 class MockTest(unittest.TestCase):

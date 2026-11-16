@@ -5,12 +5,7 @@ import time
 from itertools import combinations
 from pathlib import Path
 
-from .contract import CONTRACT, validate_result, validate_schema
-
-
-class InvalidInput(Exception):
-    pass
-
+from .contract import CONTRACT, InvalidInput, validate_result, validate_schema
 
 # Ключевые токены, которые сохраняются при нормализации (аналогично мок-движку
 # фронта): остальные идентификаторы (локальные переменные/методы) заменяются на

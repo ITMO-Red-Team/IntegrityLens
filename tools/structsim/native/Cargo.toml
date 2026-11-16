@@ -1,0 +1,17 @@
+[package]
+name = "structsim-native"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Шаг 3 и тайлы structsim: те же числа, что у Python, на порядки быстрее"
+
+# Зависимостей нет намеренно, как и у ядра на Python: сборке не нужен реестр
+# пакетов, а обновлять и проверять нечего.
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

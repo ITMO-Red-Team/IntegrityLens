@@ -82,6 +82,10 @@ uv run structsim <директория> --tiles a_py.py c_translated.go
 Плюс отдельный вывод: **тайлы** — какие куски двух программ совпали
 ([`tiles.py`](src/structsim/tiles.py)). На оценку не влияют.
 
+Шаг 3 и тайлы есть в двух реализациях с одинаковыми числами: эталон на Python и
+[`native/`](docs/native.md) на Rust, быстрее в сотни раз. Воркер работает через
+него, эталон нужен для проверки и работы без сборки.
+
 **Как это связано между собой — [docs/pipeline.md](docs/pipeline.md).** Там
 схема, что откуда вызывается и какие данные идут между шагами.
 
@@ -92,6 +96,7 @@ uv run structsim <директория> --tiles a_py.py c_translated.go
 | [docs/pipeline.md](docs/pipeline.md) | конвейер: границы, типы, три меры, тайлы, что осталось |
 | [docs/step1.md](docs/step1.md) | шаг 1: `semgrep-core` и позиции токенов, языки, запуск образа, что может пойти не так |
 | [docs/step2.md](docs/step2.md) | шаг 2: таблица «узел → метки», почему порядок инфиксный, блоки, позиции |
+| [docs/native.md](docs/native.md) | шаг 3 и тайлы на Rust: почему числа те же, откуда скорость, асимптотика, формат |
 
 ## Тесты
 
@@ -114,6 +119,7 @@ tools/structsim/
   docker/
     semgrep.Dockerfile      — образ для шага 1
   docs/                     — конвейер и шаг 1
+  native/                   — шаг 3 и тайлы на Rust
   src/structsim/
     semgrep.py              — шаг 1: файл → дерево
     labels.py               — шаг 2: дерево → метки и блоки
@@ -122,6 +128,7 @@ tools/structsim/
     tiles.py                — общие куски (GST)
     model.py                — Program, Block, Tile, Span
     analyze.py              — конвейер целиком
+    native.py               — запуск native/
     cli.py                  — командная строка
   tests/
     data/                   — выгрузки semgrep-core для тестов

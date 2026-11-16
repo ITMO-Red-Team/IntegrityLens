@@ -13,7 +13,7 @@ docker compose --env-file .env -f infra/docker-compose.yml up --build -d
 
 ## Проверки
 
-Из корня, с Python и зависимостями из `worker/requirements.txt`:
+Из корня, с Python и зависимостями из `infra/requirements.txt`:
 
 ```sh
 API_PORT=18080 docker compose -p integritylens-check -f infra/docker-compose.yml up --build -d
@@ -21,13 +21,18 @@ python3 infra/smoke_test.py --base http://localhost:18080
 python3 infra/export_openapi.py --base http://localhost:18080 --check
 ```
 
-Сквозной тест требует `MOCK_SCENARIO=success` и оставляет пакеты в тестовой БД.
-Для тестов очереди дождитесь завершения заданий и остановите воркеры:
+Сквозной тест идёт и на настоящих методах, и на моке с `CORE_ENGINE=mock MOCK_SCENARIO=success`,
+и оставляет пакеты в тестовой БД. Для тестов очереди и методов дождитесь завершения заданий и
+остановите воркеры:
 
 ```sh
 docker compose -p integritylens-check -f infra/docker-compose.yml stop worker-jplag worker-structsim
 docker compose -p integritylens-check -f infra/docker-compose.yml run --rm --no-deps worker-jplag \
   python -m unittest discover -s worker/tests -v
+docker compose -p integritylens-check -f infra/docker-compose.yml run --rm --no-deps worker-jplag \
+  python -m unittest discover -s worker/core/tests -v
+docker compose -p integritylens-check -f infra/docker-compose.yml run --rm --no-deps worker-structsim \
+  python -m unittest discover -s worker/core/tests -v
 ```
 
 Удалить тестовый стек вместе с его данными:

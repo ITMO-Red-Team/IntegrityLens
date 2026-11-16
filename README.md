@@ -1,7 +1,6 @@
 # IntegrityLens
 
-Бэкенд сравнения Java-работ: API, два воркера, PostgreSQL и MinIO.
-Анализ пока возвращает детерминированные mock-оценки; сходство кода они не измеряют.
+Бэкенд сравнения Java-работ: API, два воркера (JPlag и structsim), PostgreSQL и MinIO.
 
 ## Запуск
 

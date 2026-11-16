@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -18,15 +19,25 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from worker.core.contract import CONTRACT, validate_result, validate_schema
+from worker.core.engine import Stopwatch
 
 LOG = logging.getLogger("worker")
+FILE_NAME = re.compile(r"[^/\\\0]+\.java")
+MAX_FILE_NAME_BYTES = 200
+STDERR_TAIL_BYTES = 2000
+# Эти параметры задаёт воркер. Из очереди они включили бы мок на настоящем методе.
+MOCK_PARAMS = ("mockScenario", "delaySeconds")
 
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         return json.dumps({"timestamp": self.formatTime(record), "level": record.levelname,
                            "message": record.getMessage(), "batchId": getattr(record, "batchId", None),
-                           "runId": getattr(record, "runId", None)})
+                           "runId": getattr(record, "runId", None), "timings": getattr(record, "timings", None)})
+
+
+def log_fields(run):
+    return {"batchId": str(run["batch_id"]), "runId": str(run["id"])}
 
 
 class RunError(Exception):
@@ -47,6 +58,9 @@ class Worker:
         self.database = os.environ["DATABASE_URL"]
         self.worker_id = f"{socket.gethostname()}-{uuid4()}"
         self.bucket = os.getenv("S3_BUCKET", "integritylens")
+        self.engine = os.getenv("CORE_ENGINE", "real")
+        if self.engine not in ("real", "mock"):
+            raise ValueError("Unknown CORE_ENGINE")
         self.delay = float(os.getenv("MOCK_DELAY_SECONDS", "2"))
         self.scenario = os.getenv("MOCK_SCENARIO", "success")
         if self.scenario not in ("success", "partial", "fail_once", "tool_error", "invalid_input"):
@@ -96,7 +110,72 @@ class Worker:
                 lost.set()
                 return
 
+    def params(self, run):
+        """Параметры запуска. Сценарий мока — тоже параметр: по нему core выбирает мок."""
+        if self.engine != "mock":
+            if any(name in run["params"] for name in MOCK_PARAMS):
+                raise RunError("Mock params are not allowed for a real method", False)
+            return run["params"]
+        scenario = self.scenario
+        if scenario == "fail_once":
+            scenario = "tool_error" if run["attempts"] == 1 else "success"
+        return {**run["params"], "mockScenario": scenario, "delaySeconds": self.delay}
+
+    def download(self, submission, input_dir):
+        sid = str(submission["id"])
+        # Исходное имя остаётся в API, а методам оно не важно, и из-за неудобного имени
+        # (`.java`, слишком длинное для файловой системы) не должен падать весь пакет.
+        name = PurePosixPath(submission["original_name"]).name
+        if not FILE_NAME.fullmatch(name) or len(name.encode()) > MAX_FILE_NAME_BYTES:
+            name = "Main.java"
+        destination = input_dir / "submissions" / sid / name
+        destination.parent.mkdir(parents=True)
+        response = self.s3.get_object(Bucket=self.bucket, Key=submission["storage_key"])
+        try:
+            destination.write_bytes(response["Body"].read())
+        finally:
+            response["Body"].close()
+        return {"id": sid, "language": submission["language"], "files": [name]}
+
+    def core_command(self, input_dir, output_dir):
+        return [sys.executable, "-m", "worker.core", "run", "--input", str(input_dir), "--output", str(output_dir)]
+
+    def run_core(self, input_dir, output_dir, lost, fields=None):
+        # Своя группа процессов: у core есть дети (JVM, semgrep-core), и kill только
+        # самого core оставил бы их работать дальше без присмотра.
+        with tempfile.TemporaryFile() as stderr:
+            process = subprocess.Popen(self.core_command(input_dir, output_dir), stdout=subprocess.DEVNULL,
+                                       stderr=stderr, start_new_session=True)
+            try:
+                deadline = time.monotonic() + self.timeout
+                while True:
+                    try:
+                        process.wait(timeout=0.1)
+                        break
+                    except subprocess.TimeoutExpired:
+                        pass
+                    if lost.is_set() or self.stop.is_set():
+                        raise LeaseLost()
+                    if time.monotonic() >= deadline:
+                        # Тот же вход не уложится и в следующий раз, а воркер у метода один.
+                        raise RunError("Core timeout", False)
+            finally:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                process.wait()
+            stderr.seek(-min(STDERR_TAIL_BYTES, stderr.seek(0, os.SEEK_END)), os.SEEK_END)
+            tail = stderr.read().decode("utf-8", "replace").strip()
+            if process.returncode != 0:
+                LOG.warning("Core failed: %s", tail, extra=fields)
+                raise RunError(f"Core exited with code {process.returncode}", process.returncode != 2)
+            # И при успехе: core пишет сюда, почему не разобран файл и что считает эталоном вместо native.
+            if tail:
+                LOG.info("Core stderr: %s", tail, extra=fields)
+
     def execute(self, run, lost):
+        watch = Stopwatch()
         with tempfile.TemporaryDirectory(prefix="integritylens-") as folder:
             root = Path(folder)
             input_dir, output_dir = root / "input", root / "output"
@@ -104,59 +183,44 @@ class Worker:
             with self.connect() as db:
                 submissions = db.execute("select * from submissions where batch_id = %s order by id",
                                          (run["batch_id"],)).fetchall()
-            scenario = self.scenario
-            if scenario == "fail_once":
-                scenario = "tool_error" if run["attempts"] == 1 else "success"
-            job = {"contract": CONTRACT, "runId": str(run["id"]), "method": self.method,
-                   "params": {**run["params"], "mockScenario": scenario, "delaySeconds": self.delay},
-                   "submissions": []}
-            for submission in submissions:
-                sid = str(submission["id"])
-                name = PurePosixPath(submission["original_name"]).name
-                destination = input_dir / "submissions" / sid / name
-                destination.parent.mkdir(parents=True)
-                response = self.s3.get_object(Bucket=self.bucket, Key=submission["storage_key"])
-                try:
-                    destination.write_bytes(response["Body"].read())
-                finally:
-                    response["Body"].close()
-                job["submissions"].append({"id": sid, "language": submission["language"], "files": [name]})
+            job = {"contract": CONTRACT, "runId": str(run["id"]), "method": self.method, "params": self.params(run),
+                   "submissions": [self.download(submission, input_dir) for submission in submissions]}
             validate_schema("job", job)
             (input_dir / "job.json").write_text(json.dumps(job), encoding="utf-8")
-            with tempfile.TemporaryFile() as stderr:
-                process = subprocess.Popen([sys.executable, "-m", "worker.core", "run", "--input", str(input_dir),
-                                            "--output", str(output_dir)], stdout=subprocess.DEVNULL, stderr=stderr)
-                try:
-                    deadline = time.monotonic() + self.timeout
-                    while process.poll() is None:
-                        if lost.is_set() or self.stop.is_set():
-                            raise LeaseLost()
-                        if time.monotonic() >= deadline:
-                            raise RunError("Core timeout")
-                        time.sleep(0.2)
-                    if process.returncode != 0:
-                        raise RunError(f"Core exited with code {process.returncode}", process.returncode != 2)
-                finally:
-                    if process.poll() is None:
-                        process.kill()
-                    process.wait()
-            result = json.loads((output_dir / "result.json").read_text(encoding="utf-8"))
+            watch.lap("download")
+            self.run_core(input_dir, output_dir, lost, log_fields(run))
+            watch.lap("core")
+            raw = (output_dir / "result.json").read_text(encoding="utf-8")
+            result = json.loads(raw)
             validate_result(job, result)
+            watch.lap("validate")
             if lost.is_set():
                 raise LeaseLost()
             prefix = f"runs/{run['id']}/attempt-{run['attempts']}/"
             for artifact in output_dir.rglob("*"):
                 if artifact.is_file():
                     self.s3.upload_file(str(artifact), self.bucket, prefix + artifact.relative_to(output_dir).as_posix())
+            watch.lap("upload")
             with self.connect() as db:
                 changed = db.execute("""
-                    update runs set status = 'done', result = %s, finished_at = now(),
+                    update runs set status = 'done', result = %s::jsonb, finished_at = now(),
                         method_version = %s, params = %s, artifacts_prefix = %s, error = null, locked_by = null
                     where id = %s and attempts = %s and locked_by = %s and status = 'running'
-                    """, (Jsonb(result), result["methodVersion"], Jsonb(result["params"]), prefix,
+                    """, (raw, result["methodVersion"], Jsonb(result["params"]), prefix,
                           run["id"], run["attempts"], self.worker_id)).rowcount
             if changed != 1:
                 raise LeaseLost()
+            watch.lap("commit")
+            return watch.timings
+
+    def release(self, run):
+        """Остановка воркера — не вина задания: попытка не считается, и ждать аренду незачем."""
+        with self.connect() as db:
+            db.execute("""
+                update runs set status = 'queued', attempts = attempts - 1, started_at = null,
+                    locked_by = null, heartbeat_at = null
+                where id = %s and attempts = %s and locked_by = %s and status = 'running'
+                """, (run["id"], run["attempts"], self.worker_id))
 
     def fail(self, run, error):
         retryable = error.retryable if isinstance(error, RunError) else True
@@ -170,15 +234,17 @@ class Worker:
                 """, (retryable, retryable, message, run["id"], run["attempts"], self.worker_id))
 
     def process(self, run):
-        fields = {"batchId": str(run["batch_id"]), "runId": str(run["id"])}
+        fields = log_fields(run)
         finished, lost = threading.Event(), threading.Event()
         heartbeat = threading.Thread(target=self.heartbeat, args=(run, finished, lost), daemon=True)
         heartbeat.start()
         try:
             LOG.info("Run started", extra=fields)
-            self.execute(run, lost)
-            LOG.info("Run completed", extra=fields)
+            timings = self.execute(run, lost)
+            LOG.info("Run completed", extra={**fields, "timings": timings})
         except LeaseLost:
+            if self.stop.is_set():
+                self.release(run)
             LOG.warning("Run interrupted or lease lost", extra=fields)
         except Exception as error:
             self.fail(run, error)

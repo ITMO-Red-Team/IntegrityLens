@@ -23,11 +23,57 @@ def request(base, path, method="GET", data=None, headers=None):
         return response.status, value
 
 
+def program(name, body):
+    return f"""class {name} {{
+    static int solve(int[] values, int limit) {{
+{body}
+    }}
+
+    public static void main(String[] args) {{
+        System.out.println(solve(new int[] {{1, 2, 3}}, 2));
+    }}
+}}
+"""
+
+
+SUM = """        int total = 0;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] < limit) {
+                total += values[i];
+            } else {
+                total -= limit;
+            }
+        }
+        return total;"""
+SUM_RENAMED = """        int sum = 0;
+        for (int k = 0; k < values.length; k++) {
+            if (values[k] < limit) {
+                sum += values[k];
+            } else {
+                sum -= limit;
+            }
+        }
+        return sum;"""
+OTHER = """        int best = limit;
+        int current = 0;
+        for (int value : values) {
+            current = value % limit == 0 ? current + value : current / 2;
+            if (current > best && current % 3 != 1) {
+                best = current - limit;
+                continue;
+            }
+            best ^= value << 1;
+        }
+        return best * limit - current;"""
+
+
 def archive(marker):
+    """Пять работ с известным ответом: Main1 — это Main0 с другими именами."""
+    bodies = [SUM, SUM_RENAMED, OTHER, OTHER.replace("current", "running"), SUM + "\n        // copy"]
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zipped:
-        for i in range(5):
-            zipped.writestr(f"folder/Main{i}.java", f"// {marker}\nclass Main{i} {{ int value = {i}; }}\n")
+        for i, body in enumerate(bodies):
+            zipped.writestr(f"folder/Main{i}.java", f"// {marker}\n" + program(f"Main{i}", body))
     return output.getvalue()
 
 
@@ -77,8 +123,10 @@ def main():
             break
         time.sleep(1)
     assert batch["status"] == "done", batch
-    assert all(r["status"] == "done" and r["methodVersion"] == "mock-v1" for r in batch["runs"]), batch
-    assert all(r["parsed"] == 5 and r["failed"] == 0 for r in batch["runs"])
+    assert all(r["status"] == "done" for r in batch["runs"]), batch
+    assert all(r["parsed"] == 5 and r["failed"] == 0 for r in batch["runs"]), batch
+    versions = {r["method"]: r["methodVersion"] for r in batch["runs"]}
+    assert versions["jplag"].startswith(("jplag-", "mock-")) and versions["structsim"].startswith(("structsim-", "mock-"))
     status, submissions = request(base, f"/api/batches/{batch_id}/submissions")
     validate(submissions, "Submissions")
     assert status == 200 and submissions["total"] == 5
@@ -96,6 +144,14 @@ def main():
             scores = [p["scores"][method]["value"] for p in pairs["pairs"] if submission["id"] in (p["a"], p["b"])]
             assert result["score"] == max(scores)
             assert [m["score"] for m in result["matches"]] == sorted(scores, reverse=True)[:3]
+    if not versions["jplag"].startswith("mock-"):
+        # Настоящие методы: Main1 — переименованная копия Main0, куски показаны строками.
+        names = {s["id"]: s["originalName"] for s in submissions["submissions"]}
+        copy = next(p for p in pairs["pairs"] if {names[p["a"]], names[p["b"]]} == {"folder/Main0.java", "folder/Main1.java"})
+        for method in versions:
+            assert copy["scores"][method]["value"] == 1.0, copy
+            detail = request(base, f"/api/pairs/{copy['id']}")[1]["scores"][method]
+            assert detail["fragments"] and all(line >= 1 for f in detail["fragments"] for line in f["a"] + f["b"]), detail
     pair_id = pairs["pairs"][0]["id"]
     status, pair = request(base, f"/api/pairs/{pair_id}")
     validate(pair, "PairDetail")

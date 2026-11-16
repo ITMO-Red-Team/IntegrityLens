@@ -1,8 +1,11 @@
 import concurrent.futures
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 from uuid import uuid4
 
-from worker.__main__ import RunError, Worker
+from worker.__main__ import LeaseLost, RunError, Worker
 
 
 class QueueTest(unittest.TestCase):
@@ -51,6 +54,32 @@ class QueueTest(unittest.TestCase):
         self.first.fail(run, RunError("invalid input", False))
         self.assertEqual(self.row()["status"], "failed")
         self.assertEqual(self.row()["attempts"], 1)
+
+    def test_stopping_worker_returns_run_without_spending_attempt(self):
+        run = self.first.claim()
+        self.first.stop.set()
+        with mock.patch.object(self.first, "execute", side_effect=LeaseLost()):
+            self.first.process(run)
+        self.assertEqual((self.row()["status"], self.row()["attempts"], self.row()["locked_by"]), ("queued", 0, None))
+        self.assertEqual(self.second.claim()["attempts"], 1)
+
+    def test_lost_lease_does_not_touch_new_owner(self):
+        old = self.first.claim()
+        with self.first.connect() as db:
+            db.execute("update runs set heartbeat_at = now() - interval '3 minutes' where id = %s", (self.run_id,))
+        self.second.claim()
+        self.first.release(old)
+        self.assertEqual((self.row()["status"], self.row()["locked_by"]), ("running", self.second.worker_id))
+
+    def test_inconvenient_file_names_do_not_fail_the_batch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.first.s3 = mock.Mock()
+            self.first.s3.get_object.side_effect = lambda **_: {"Body": mock.Mock(read=lambda: b"class A {}")}
+            for original, expected in (("folder/Main.java", "Main.java"), ("folder/.java", "Main.java"),
+                                       ("я" * 126 + ".java", "Main.java"), ("Работа 1.java", "Работа 1.java")):
+                entry = self.first.download({"id": uuid4(), "original_name": original, "language": "java",
+                                             "storage_key": "key"}, Path(folder))
+                self.assertEqual(entry["files"], [expected])
 
     def test_expired_final_attempt_becomes_failed(self):
         self.first.claim()

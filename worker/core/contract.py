@@ -2,15 +2,26 @@ import json
 from itertools import combinations
 from pathlib import Path
 
-from jsonschema import Draft202012Validator, FormatChecker
+import fastjsonschema
 
 CONTRACT = "integritylens.core/1"
 SCHEMAS = Path(__file__).parent / "schemas"
+FORMATS = {"uuid": r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}
+_VALIDATORS = {}
+
+
+class InvalidInput(Exception):
+    pass
 
 
 def validate_schema(name, value):
-    schema = json.loads((SCHEMAS / f"{name}.schema.json").read_text())
-    Draft202012Validator(schema, format_checker=FormatChecker()).validate(value)
+    # Схема компилируется в код: проверка результата на порядок быстрее, чем у jsonschema
+    # (замеры в worker/bench/README.md). Схемы не меняются, поэтому компиляция одна на процесс.
+    validate = _VALIDATORS.get(name)
+    if validate is None:
+        schema = json.loads((SCHEMAS / f"{name}.schema.json").read_text())
+        validate = _VALIDATORS[name] = fastjsonschema.compile(schema, formats=FORMATS)
+    validate(value)
 
 
 def validate_result(job, result):
@@ -26,15 +37,20 @@ def validate_result(job, result):
         raise ValueError("Result pairs mismatch")
     by_id = {s["id"]: s for s in result["submissions"]}
     by_pair = {(p["a"], p["b"]): p for p in result["pairs"]}
+    best = {}
     for pair in result["pairs"]:
-        if pair["value"] is not None and any(by_id[s]["status"] == "failed" for s in (pair["a"], pair["b"])):
-            raise ValueError("Scored pair contains a failed submission")
+        value = pair["value"]
+        if value is None:
+            continue
+        for sid in (pair["a"], pair["b"]):
+            if by_id[sid]["status"] == "failed":
+                raise ValueError("Scored pair contains a failed submission")
+            if value > best.get(sid, -1):
+                best[sid] = value
     for submission in result["submissions"]:
         if submission["status"] != "ok":
             continue
-        values = [p["value"] for p in result["pairs"]
-                  if submission["id"] in (p["a"], p["b"]) and p["value"] is not None]
-        if submission["score"] != (max(values) if values else None):
+        if submission["score"] != best.get(submission["id"]):
             raise ValueError("Submission score is inconsistent with pairs")
         matches = submission["matches"]
         if len({m["with"] for m in matches}) != len(matches):

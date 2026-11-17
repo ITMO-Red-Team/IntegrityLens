@@ -17,3 +17,11 @@ services:
     build:
       context: ./structsim/docker
       dockerfile: semgrep.Dockerfile
+
+  aicode:
+    image: integritylens/aicode:0.1.0
+    build:
+      context: ./aicode
+      dockerfile: aicode.Dockerfile
+      args:
+        AICODE_QUANTIZATION: ${AICODE_QUANTIZATION:-int2}

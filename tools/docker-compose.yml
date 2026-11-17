@@ -17,3 +17,14 @@ services:
     build:
       context: ./structsim/docker
       dockerfile: semgrep.Dockerfile
+
+  aicode:
+    image: integritylens/aicode:0.1.0
+    build:
+      context: ./aicode
+      dockerfile: aicode.Dockerfile
+      # Готовые веса собираются заранее (uv run python -m aicode.export_model),
+      # поэтому сборка образа модель из сети не скачивает.
+      target: image
+      args:
+        AICODE_MODEL_DIR: ${AICODE_MODEL_DIR:-artifacts/gigacheck-int2}

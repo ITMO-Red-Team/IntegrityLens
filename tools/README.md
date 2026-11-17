@@ -8,6 +8,7 @@
 |---|---|
 | [`jplag/`](jplag/README.md) | **внешний.** Baseline: поиск плагиата по Greedy String Tiling, один язык |
 | [`structsim/`](structsim/README.md) | **наш.** Структурное сходство программ, в том числе между языками |
+| [`aicode/`](aicode/README.md) | **внешняя модель.** Локальная оценка AI-фрагментов в исходном коде, CPU |
 | `docker-compose.yml` | сборка образов обоих |
 
 Разница между ними принципиальна. **JPlag** мы не разрабатываем: прибиваем
@@ -22,13 +23,31 @@
 
 ## Сборка образов
 
+Образы JPlag и Semgrep не содержат модель. Образ `aicode` включает локально
+квантизованный checkpoint. Веса сначала экспортируются на машине сборки
+(`aicode.export_model`: скачивает исходную модель, ~14 GB, и записывает
+полные пути скачанных файлов в `artifacts/*.downloads.txt`), затем образ
+собирается из готовых артефактов и модель из сети при сборке не скачивает.
+Серверу для запуска нужен только готовый образ — Hugging Face во время работы
+не используется. Сам образ всё равно нужно передать серверу (например, через
+registry или `docker save`); размер образа зависит от выбранного режима PTQ.
+
 ```bash
-docker compose -f tools/docker-compose.yml build
+docker compose -f tools/docker-compose.yml build jplag semgrep
+docker compose -f tools/docker-compose.yml build aicode
 ```
 
-Собирается два образа: JPlag для baseline и Semgrep для шага 1 метода.
+Для компромисса между размером и качеством экспортируется int4-вариант и
+собирается он:
+`AICODE_MODEL_DIR=artifacts/gigacheck-int4 docker compose -f tools/docker-compose.yml build aicode`.
+По умолчанию используется int2.
+
+Собираются два образа: JPlag для baseline и Semgrep для шага 1 метода.
 Запускаются они не через compose, а из кода: каждому прогону нужны свои
 монтирования и аргументы.
+
+`aicode` можно запускать локально через Python без Docker или использовать
+готовый Docker-образ с включённым квантизованным checkpoint. GPU не требуется.
 
 ## Правила
 

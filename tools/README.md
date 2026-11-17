@@ -24,19 +24,22 @@
 ## Сборка образов
 
 Образы JPlag и Semgrep не содержат модель. Образ `aicode` включает локально
-квантизованный checkpoint. Его сборка скачивает исходную модель (~14 GB) на
-машину сборки, экспортирует веса, а серверу для запуска нужен только готовый
-образ — Hugging Face во время работы не используется. Сам образ всё равно
-нужно передать серверу (например, через registry или `docker save`); размер
-образа зависит от выбранного режима PTQ.
+квантизованный checkpoint. Веса сначала экспортируются на машине сборки
+(`aicode.export_model`: скачивает исходную модель, ~14 GB, и записывает
+полные пути скачанных файлов в `artifacts/*.downloads.txt`), затем образ
+собирается из готовых артефактов и модель из сети при сборке не скачивает.
+Серверу для запуска нужен только готовый образ — Hugging Face во время работы
+не используется. Сам образ всё равно нужно передать серверу (например, через
+registry или `docker save`); размер образа зависит от выбранного режима PTQ.
 
 ```bash
 docker compose -f tools/docker-compose.yml build jplag semgrep
 docker compose -f tools/docker-compose.yml build aicode
 ```
 
-Для компромисса между размером и качеством можно собрать int4-образ:
-`AICODE_QUANTIZATION=int4 docker compose -f tools/docker-compose.yml build aicode`.
+Для компромисса между размером и качеством экспортируется int4-вариант и
+собирается он:
+`AICODE_MODEL_DIR=artifacts/gigacheck-int4 docker compose -f tools/docker-compose.yml build aicode`.
 По умолчанию используется int2.
 
 Собираются два образа: JPlag для baseline и Semgrep для шага 1 метода.

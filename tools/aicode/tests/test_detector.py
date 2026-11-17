@@ -92,12 +92,12 @@ def test_merge_ranges_handles_overlap_and_touching_ranges():
 
 
 def test_collect_files_recurses_and_ignores_generated_directories(tmp_path):
-    source = tmp_path / "src" / "main.py"
+    source = tmp_path / "src" / "Main.java"
     source.parent.mkdir()
-    source.write_text("pass", encoding="utf-8")
-    ignored = tmp_path / "node_modules" / "dep" / "x.py"
+    source.write_text("class Main {}\n", encoding="utf-8")
+    ignored = tmp_path / "node_modules" / "dep" / "Other.java"
     ignored.parent.mkdir(parents=True)
-    ignored.write_text("pass", encoding="utf-8")
+    ignored.write_text("class Other {}\n", encoding="utf-8")
 
     assert collect_files([tmp_path]) == [source.resolve()]
 
@@ -109,7 +109,7 @@ def test_collect_files_reports_unsupported_and_missing_inputs(tmp_path):
     with pytest.raises(DetectorError, match="unsupported source extension"):
         collect_files([unsupported])
     with pytest.raises(DetectorError, match="does not exist"):
-        collect_files([tmp_path / "missing.py"])
+        collect_files([tmp_path / "missing.java"])
 
 
 def test_load_model_uses_quanto_int2_and_cpu_device_map(monkeypatch):
@@ -286,6 +286,84 @@ def test_export_model_refuses_nonempty_output_directory(tmp_path):
         export_model_module.export_model(output)
 
 
+def test_export_model_writes_download_manifest_for_hub_source(tmp_path, monkeypatch):
+    output = tmp_path / "model"
+    source_code = tmp_path / "upstream"
+    source_code.mkdir()
+    (source_code / "configuration_gigacheck.py").write_text(
+        "class GigaCheckConfig: pass\n", encoding="utf-8"
+    )
+    (source_code / "modeling_gigacheck.py").write_text(
+        "class GigaCheckForDetection: pass\n", encoding="utf-8"
+    )
+    cache_root = tmp_path / "hf" / "hub"
+    model_cache = cache_root / "models--iitolstykh--GigaCheck-Detector-Multi"
+    (model_cache / "blobs").mkdir(parents=True)
+    (model_cache / "blobs" / "checkpoint").write_bytes(b"x" * 2048)
+    xet_dir = tmp_path / "hf" / "xet"
+    xet_dir.mkdir()
+    (xet_dir / "chunk").write_bytes(b"y" * 512)
+
+    class FakeModel:
+        config = SimpleNamespace(
+            auto_map={
+                "AutoConfig": "configuration_gigacheck.GigaCheckConfig",
+                "AutoModel": "modeling_gigacheck.GigaCheckForDetection",
+            },
+            save_pretrained=lambda _path: None,
+        )
+
+        def state_dict(self):
+            return {}
+
+    class FakeTokenizer:
+        def save_pretrained(self, *_args, **_kwargs):
+            pass
+
+    fake_hub = ModuleType("huggingface_hub")
+    fake_hub.hf_hub_download = lambda repo_id, filename, revision, local_files_only: (
+        source_code / filename
+    )
+    fake_constants = ModuleType("huggingface_hub.constants")
+    fake_constants.HF_HUB_CACHE = str(cache_root)
+    fake_constants.HF_HOME = str(tmp_path / "hf")
+    fake_hub.constants = fake_constants
+    fake_file_download = ModuleType("huggingface_hub.file_download")
+    fake_file_download.repo_folder_name = lambda repo_id, repo_type: (
+        "models--iitolstykh--GigaCheck-Detector-Multi"
+    )
+    fake_hub.file_download = fake_file_download
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
+    monkeypatch.setitem(sys.modules, "huggingface_hub.constants", fake_constants)
+    monkeypatch.setitem(sys.modules, "huggingface_hub.file_download", fake_file_download)
+    fake_quanto = ModuleType("optimum.quanto")
+    fake_quanto.quantization_map = lambda _model: {}
+    monkeypatch.setitem(sys.modules, "optimum.quanto", fake_quanto)
+    fake_safetensors_torch = ModuleType("safetensors.torch")
+    fake_safetensors_torch.save_file = lambda _state, _path: None
+    fake_safetensors = ModuleType("safetensors")
+    fake_safetensors.torch = fake_safetensors_torch
+    monkeypatch.setitem(sys.modules, "safetensors", fake_safetensors)
+    monkeypatch.setitem(sys.modules, "safetensors.torch", fake_safetensors_torch)
+    monkeypatch.setattr(
+        export_model_module,
+        "load_model",
+        lambda **_kwargs: (FakeModel(), FakeTokenizer(), FakeTorch),
+    )
+
+    assert export_model_module.export_model(output) == output.resolve()
+
+    manifest = output.parent / "model.downloads.txt"
+    text = manifest.read_text(encoding="utf-8")
+    assert "iitolstykh/GigaCheck-Detector-Multi@" in text
+    assert str(output.resolve()) in text
+    assert str(model_cache) in text
+    assert str(model_cache / "blobs" / "checkpoint") in text
+    assert "2.0 KB" in text
+    assert str(xet_dir) in text
+    assert "512 B" in text
+
+
 def test_export_model_can_load_from_local_checkpoint(tmp_path, monkeypatch):
     source = tmp_path / "source"
     source.mkdir()
@@ -343,3 +421,4 @@ def test_export_model_can_load_from_local_checkpoint(tmp_path, monkeypatch):
     assert calls["local_files_only"] is True
     assert (output / "configuration_gigacheck.py").exists()
     assert (output / "modeling_gigacheck.py").exists()
+    assert not (output.parent / f"{output.name}.downloads.txt").exists()

@@ -23,5 +23,8 @@ services:
     build:
       context: ./aicode
       dockerfile: aicode.Dockerfile
+      # Готовые веса собираются заранее (uv run python -m aicode.export_model),
+      # поэтому сборка образа модель из сети не скачивает.
+      target: image
       args:
-        AICODE_QUANTIZATION: ${AICODE_QUANTIZATION:-int2}
+        AICODE_MODEL_DIR: ${AICODE_MODEL_DIR:-artifacts/gigacheck-int2}

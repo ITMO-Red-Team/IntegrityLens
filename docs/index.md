@@ -20,4 +20,4 @@ IntegrityLens помогает преподавателю находить уч�
 - [Требования без стилистического анализа](requirements-without-stylometry.txt).
 - [Репозиторий](https://github.com/ITMO-Red-Team/IntegrityLens).
 - [Доска задач](https://github.com/orgs/ITMO-Red-Team/projects/1).
-- [Спецификация OpenAPI](https://github.com/ITMO-Red-Team/IntegrityLens/blob/main/api/openapi.yaml).
+- [Спецификация OpenAPI](openapi.yaml).

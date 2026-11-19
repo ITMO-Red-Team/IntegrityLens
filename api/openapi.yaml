@@ -1,1250 +1,777 @@
 openapi: 3.1.0
 info:
+  description: MVP. JPlag и structsim возвращают детерминированные mock-оценки.
   title: IntegrityLens API
-  version: 1.0.0
-  description: |-
-    API for Java assignment submissions and integrity analysis. JPlag is not part
-    of this contract; pair similarity is provided by structsim and per-submission
-    AI analysis. Analysis runs asynchronously, so scores may be pending.
+  version: 0.1.0
 servers:
-  - url: /
-tags:
-  - name: Authentication
-  - name: Assignments
-  - name: Submissions
-security:
-  - sessionCookie: []
+- url: /
 paths:
-  /api/auth/register:
-    post:
-      tags:
-        - Authentication
-      operationId: register
-      summary: Создать учётную запись
-      security: []
-      description: Создаёт пользователя без сессии. После регистрации требуется отдельный вход.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterRequest'
-      responses:
-        '201':
-          description: Пользователь создан. Сессионная cookie не устанавливается.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-              description: Не кешировать ответ авторизации.
-        '409':
-          description: Email уже зарегистрирован.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                code: EMAIL_ALREADY_REGISTERED
-                message: Этот email уже зарегистрирован.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-              description: Не кешировать ответ авторизации.
-        '422':
-          $ref: '#/components/responses/AuthValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/auth/login:
-    post:
-      tags:
-        - Authentication
-      operationId: login
-      summary: Sign in
-      security: []
-      description: >-
-        Создаёт сессию на 24 часа без продления при обращениях. Каждый успешный
-
-        вход выдаёт новый токен. Пароль проверяется без обрезки пробелов и изменения регистра.
-        Успешный вход аннулирует прежнюю сессию, переданную в cookie этого браузера. Сессии других
-        устройств сохраняются. Неуспешный вход не меняет действующие сессии.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-      responses:
-        '200':
-          description: Authenticated; session cookie issued.
-          headers:
-            Set-Cookie:
-              $ref: '#/components/headers/SessionCookie'
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-              description: Не кешировать ответ авторизации.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '401':
-          description: Неверный email или пароль. Одинаковый ответ для обоих случаев.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                code: INVALID_CREDENTIALS
-                message: Неверный email или пароль.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-              description: Не кешировать ответ авторизации.
-        '422':
-          $ref: '#/components/responses/AuthValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/auth/me:
+  /api/batches:
     get:
-      tags:
-        - Authentication
-      operationId: getCurrentUser
-      summary: Получить текущего пользователя
+      operationId: batches
       responses:
-        '200':
-          description: Пользователь действующей сессии. Срок сессии не продлевается.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-              description: Не кешировать ответ авторизации.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/auth/logout:
-    post:
-      tags:
-        - Authentication
-      operationId: logout
-      summary: End the current session
-      security: []
-      description: Завершает текущую сессию. При отсутствующей или истёкшей сессии также возвращает 204.
-      responses:
-        '204':
-          description: Session ended and cookie cleared.
-          headers:
-            Set-Cookie:
-              description: Expired session cookie with the same security attributes.
-              schema:
-                type: string
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-              description: Не кешировать ответ авторизации.
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/assignments:
-    get:
-      tags:
-        - Assignments
-      operationId: listAssignments
-      summary: List the authenticated teacher's assignments
-      description: Only assignments owned by the authenticated teacher are returned.
-      responses:
-        '200':
-          description: Assignment summaries.
+        "200":
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/AssignmentSummary'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '503':
-          $ref: '#/components/responses/Unavailable'
+                  $ref: "#/components/schemas/Batch"
+          description: Список пакетов
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
     post:
-      tags:
-        - Assignments
-      operationId: createAssignment
-      summary: Create an assignment and its submission link
+      description: Идентичные байты ZIP возвращают существующий пакет; первоначальный
+        title сохраняется.
+      operationId: upload
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateAssignmentRequest'
-      responses:
-        '201':
-          description: Assignment created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Assignment'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/assignments/{assignmentId}:
-    parameters:
-      - $ref: '#/components/parameters/AssignmentId'
-    get:
-      tags:
-        - Assignments
-      operationId: getAssignment
-      summary: Get an assignment
-      responses:
-        '200':
-          description: Assignment and stable submission link.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Assignment'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-    delete:
-      tags:
-        - Assignments
-      operationId: deleteAssignment
-      summary: Remove an assignment from the teacher's active list
-      description: >-
-        Скрывает задание, закрывает ссылку и исключает его из источников с пересчётом сходства
-        зависимых заданий. Сдачи хранятся три года. Повтор удаления своего задания возвращает 204.
-      responses:
-        '204':
-          description: Assignment removed.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/assignments/{assignmentId}/sources:
-    parameters:
-      - $ref: '#/components/parameters/AssignmentId'
-    put:
-      tags:
-        - Assignments
-      operationId: updateAssignmentSources
-      summary: Replace the assignment's source assignments
-      description: >-
-        Источники — другие неудалённые задания этого преподавателя. Изменение набора пересчитывает
-        сходство, но не AI. Неизменный набор не меняет ревизию; название и ссылка сохраняются.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateSourcesRequest'
-      responses:
-        '200':
-          description: Updated assignment.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Assignment'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/assignments/{assignmentId}/students/{studentId}/reset:
-    parameters:
-      - $ref: '#/components/parameters/AssignmentId'
-      - name: studentId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    post:
-      tags:
-        - Assignments
-      operationId: resetStudentAttempt
-      summary: Reset a student's submission attempt
-      description: >-
-        Открывает повторную сдачу без удаления текущей работы, изменения ревизии или пересчёта.
-        Повтор уже открытой попытки возвращает 204; отсутствие текущей сдачи студента — 404.
-        expectedSubmissionId должен совпадать с current_submission_id. Проверка и открытие попытки
-        атомарны; несовпадение — 409 SUBMISSION_CHANGED без изменения попытки.
-      responses:
-        '204':
-          description: Attempt reset.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          description: Текущая сдача изменилась. Обновите список работ перед новым сбросом.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                code: SUBMISSION_CHANGED
-                message: Текущая работа изменилась. Обновите список.
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required:
-                - expectedSubmissionId
-              properties:
-                expectedSubmissionId:
-                  type: string
-                  format: uuid
-  /api/assignments/{assignmentId}/submissions:
-    parameters:
-      - $ref: '#/components/parameters/AssignmentId'
-    get:
-      tags:
-        - Submissions
-      operationId: listAssignmentSubmissions
-      summary: Получить список работ с оценками и данными студентов
-      description: >-
-        Defaults to risk ordering. Scores are sorted descending, null scores last;
-
-        ties are ordered by submission UUID ascending. Submissions with pending
-
-        scores appear at the end for the selected score. studentId and fullName are returned; the
-        frontend controls name visibility.
-      parameters:
-        - name: sort
-          in: query
-          required: false
-          description: Score used for descending ordering.
-          schema:
-            type: string
-            enum:
-              - risk
-              - similarity
-              - ai
-            default: risk
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-          description: Номер страницы, начиная с 1.
-        - name: pageSize
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-          description: Число работ на странице. Сортировка применяется ко всему списку до пагинации.
-      responses:
-        '200':
-          description: Ranked rows and the active analysis policy version.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SubmissionList'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/assignments/{assignmentId}/submissions/{submissionId}:
-    parameters:
-      - $ref: '#/components/parameters/AssignmentId'
-      - $ref: '#/components/parameters/SubmissionId'
-    get:
-      tags:
-        - Submissions
-      operationId: getSubmission
-      summary: Get a submission and its analysis details
-      description: |-
-        Работа должна быть текущей сдачей собственного задания assignmentId.
-        Возвращает оценки и похожие работы в контексте актуального набора сравнения
-        этого задания. При открытии работы источника как основной frontend использует
-        assignmentId из SimilarWork. Удалённое задание или нетекущая сдача дают 404.
-      responses:
-        '200':
-          description: Submission scores, AI suspicious byte ranges, and similar work.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SubmissionDetail'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/assignments/{assignmentId}/pairs/{a}/{b}:
-    parameters:
-      - $ref: '#/components/parameters/AssignmentId'
-      - name: a
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: b
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    get:
-      tags:
-        - Submissions
-      operationId: getSubmissionPair
-      summary: Получить сходство пары и совпадающие диапазоны строк
-      description: |-
-        Диапазоны Structsim используют номера строк с 1, обе границы включены.
-        a и b в ответе соответствуют порядку работ в запросе. Backend разворачивает
-        сохранённые фрагменты, если порядок UUID в запросе обратный.
-        Пара относится к актуальному набору сравнения assignmentId: хотя бы одна
-        работа является текущей сдачей задания, вторая — его текущей сдачей или
-        текущей сдачей прямого источника. Переход к источнику как основной работе
-        выполняется через её собственное задание и не меняет контекст этого запроса.
-      responses:
-        '200':
-          description: Pair score and structsim comparison result.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PairResult'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /api/submissions/{submissionId}/source:
-    parameters:
-      - $ref: '#/components/parameters/SubmissionId'
-    get:
-      tags:
-        - Submissions
-      operationId: getSubmissionSource
-      summary: Get submitted Java source code
-      responses:
-        '200':
-          description: Source text decoded as UTF-8.
-          content:
-            text/plain; charset=utf-8:
-              schema:
-                type: string
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-      description: >-
-        Только преподаватель-владелец. Доступны текущие сдачи неудалённых заданий. Заменённые сдачи
-        и сдачи удалённых заданий возвращают 404; хранение истории не предоставляет к ней публичного
-        API.
-  /api/submit/{token}:
-    parameters:
-      - name: token
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-    get:
-      tags:
-        - Submissions
-      operationId: getSubmissionForm
-      summary: Получить форму сдачи для студента
-      responses:
-        '200':
-          description: Задание и состояние попытки текущего студента.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SubmissionForm'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-    post:
-      tags:
-        - Submissions
-      operationId: submitWork
-      summary: Сдать Java-файл
-      description: |-
-        Только для студента. Ровно один непустой файл с расширением .java,
-        строго UTF-8, не более 1000000 байт. Имя файла не используется как путь.
-        Сдача и постановка анализа в очередь атомарны в PostgreSQL.
-        Ошибка анализа после приёма не отменяет сдачу.
-      requestBody:
-        required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              additionalProperties: false
-              required:
-                - file
               properties:
-                file:
+                archive:
                   type: string
                   format: binary
-            encoding:
-              file:
-                contentType: application/octet-stream
+                language:
+                  type: string
+                  enum:
+                  - java
+                title:
+                  type: string
+              required:
+              - archive
+              - language
       responses:
-        '201':
-          description: Работа сохранена, попытка закрыта, анализ поставлен в очередь.
+        "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubmissionReceipt'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          description: SUBMISSION_ALREADY_ACCEPTED — попытка закрыта. GET возвращает принятую сдачу.
+                $ref: "#/components/schemas/Batch"
+          description: Архив уже загружен
+        "202":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '413':
-          description: FILE_TOO_LARGE — размер файла превышает 1000000 байт.
+                $ref: "#/components/schemas/Batch"
+          description: Создан новый пакет
+        "400":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '422':
-          description: FILE_REQUIRED, MULTIPLE_FILES, EMPTY_FILE, INVALID_EXTENSION, INVALID_ENCODING.
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-components:
-  securitySchemes:
-    sessionCookie:
-      type: apiKey
-      in: cookie
-      name: session
-      description: |-
-        Opaque server-side session identifier. Set with HttpOnly, Secure, and
-        SameSite=Lax. Browsers attach it to authenticated API requests.
-  headers:
-    SessionCookie:
-      description: >-
-        session=<opaque-token>; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax. Серверный
-        срок действия — 24 часа с момента входа.
-      schema:
-        type: string
-  parameters:
-    AssignmentId:
-      name: assignmentId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    SubmissionId:
-      name: submissionId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-  responses:
-    AuthValidationError:
-      description: Ошибки полей формы. Пользователь не создаётся, сессия не создаётся.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/AuthValidationError'
-          example:
-            code: VALIDATION_ERROR
-            message: Проверьте заполнение полей.
-            details:
-              fields:
-                - field: email
-                  code: INVALID_FORMAT
-                  message: Введите корректный email.
-    Unauthorized:
-      description: Authentication is required or credentials are invalid.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-          example:
-            code: AUTHENTICATION_REQUIRED
-            message: Требуется вход в систему.
-    Forbidden:
-      description: The authenticated user does not have the required role or permission.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    NotFound:
-      description: >-
-        Resource is unavailable or not found. Resources outside the teacher's ownership scope are
-        reported as not found.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Conflict:
-      description: Request conflicts with current account or resource state.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    ValidationError:
-      description: Request fields are invalid.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Unavailable:
-      description: Required service is temporarily unavailable.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-          example:
-            code: SERVICE_UNAVAILABLE
-            message: Сервис временно недоступен.
-  schemas:
-    AuthValidationError:
-      type: object
-      additionalProperties: false
-      required:
-        - code
-        - message
-        - details
-      properties:
-        code:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      summary: Загрузить ZIP с 5–50 Java-работами
+      tags:
+      - backend-controller
+  /api/batches/{batchId}:
+    get:
+      operationId: batch
+      parameters:
+      - in: path
+        name: batchId
+        required: true
+        schema:
           type: string
-          const: VALIDATION_ERROR
-        message:
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Batch"
+          description: Пакет и прогоны
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/batches/{batchId}/pairs:
+    get:
+      operationId: pairs
+      parameters:
+      - in: path
+        name: batchId
+        required: true
+        schema:
           type: string
-        details:
-          type: object
-          additionalProperties: false
-          required:
-            - fields
-          properties:
-            fields:
-              type: array
-              minItems: 1
-              items:
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pairs"
+          description: Пары пакета
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/batches/{batchId}/submissions:
+    get:
+      operationId: submissions
+      parameters:
+      - in: path
+        name: batchId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submissions"
+          description: Работы пакета
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/health:
+    get:
+      operationId: health
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
                 type: object
-                additionalProperties: false
-                required:
-                  - field
-                  - code
-                  - message
-                properties:
-                  field:
-                    type: string
-                    enum:
-                      - fullName
-                      - email
-                      - password
-                      - role
-                  code:
-                    type: string
-                    enum:
-                      - REQUIRED
-                      - INVALID_FORMAT
-                      - TOO_SHORT
-                      - TOO_LONG
-                      - INVALID_VALUE
-                  message:
-                    type: string
-    User:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
+                additionalProperties:
+                  type: string
+          description: OK
+      tags:
+      - health-controller
+  /api/pairs/{pairId}:
+    get:
+      operationId: pair
+      parameters:
+      - in: path
+        name: pairId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PairDetail"
+          description: Пара с оценками и отзывом
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/pairs/{pairId}/feedback:
+    put:
+      operationId: feedback
+      parameters:
+      - in: path
+        name: pairId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feedback"
+          description: Сохранённый отзыв
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+  /api/submissions/{submissionId}/source:
+    get:
+      operationId: source
+      parameters:
+      - in: path
+        name: submissionId
+        required: true
+        schema:
           type: string
           format: uuid
-        fullName:
-          type: string
-        role:
-          $ref: '#/components/schemas/UserRole'
-      required:
-        - id
-        - fullName
-        - role
-    UserRole:
-      type: string
-      enum:
-        - teacher
-        - student
-    RegisterRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        fullName:
-          type: string
-          minLength: 1
-          maxLength: 200
-          pattern: \S
-        email:
-          type: string
-          format: email
-          maxLength: 320
-          description: >-
-            Перед проверкой и поиском: удалить пробелы по краям и привести весь email к нижнему
-            регистру. Уникальность проверяется по нормализованному значению.
-        password:
-          type: string
-          format: password
-          minLength: 8
-          maxLength: 128
-          writeOnly: true
-          description: Без обязательных классов символов. Пробелы и регистр сохраняются.
-        role:
-          $ref: '#/components/schemas/UserRole'
-      required:
-        - fullName
-        - email
-        - password
-        - role
-    LoginRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        email:
-          type: string
-          format: email
-          maxLength: 320
-          description: >-
-            Перед проверкой и поиском: удалить пробелы по краям и привести весь email к нижнему
-            регистру. Уникальность проверяется по нормализованному значению.
-        password:
-          type: string
-          format: password
-          minLength: 8
-          maxLength: 128
-          writeOnly: true
-      required:
-        - email
-        - password
-    AssignmentSummary:
-      allOf:
-        - $ref: '#/components/schemas/AssignmentBase'
-      unevaluatedProperties: false
-    AssignmentAnalysisProgress:
-      type: object
-      additionalProperties: false
-      required:
-        - completed
-        - failed
-      description: |-
-        Прогресс анализа текущих сдач по актуальной ревизии. completed включает
-        работы с ошибками обязательного анализа. failed — их число внутри completed.
-        0 <= failed <= completed <= submissionCount. При пересчёте completed может уменьшиться.
-      properties:
-        completed:
-          type: integer
-          minimum: 0
-        failed:
-          type: integer
-          minimum: 0
-    Assignment:
-      unevaluatedProperties: false
-      allOf:
-        - $ref: '#/components/schemas/AssignmentBase'
-        - type: object
-          properties:
-            submissionUrl:
-              type: string
-              format: uri
-              description: Stable unique link containing the opaque submission token.
-            sourceAssignmentIds:
-              type: array
-              uniqueItems: true
-              items:
+      responses:
+        "200":
+          content:
+            text/plain;charset=UTF-8:
+              schema:
                 type: string
-                format: uuid
-          required:
-            - submissionUrl
-            - sourceAssignmentIds
-    CreateAssignmentRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        title:
-          type: string
-          minLength: 1
-          pattern: \S
-          description: >-
-            Пробелы по краям удаляются перед проверкой. Длина после удаления пробелов — 1–200
-            символов Unicode. После создания название неизменно.
-        sourceAssignmentIds:
-          type: array
-          uniqueItems: true
-          default: []
-          items:
-            type: string
-            format: uuid
-      required:
-        - title
-    UpdateSourcesRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        sourceAssignmentIds:
-          type: array
-          uniqueItems: true
-          items:
-            type: string
-            format: uuid
-      required:
-        - sourceAssignmentIds
-    SubmissionForm:
-      type: object
-      additionalProperties: false
-      properties:
-        teacherFullName:
-          type: string
-        currentSubmission:
-          description: >-
-            Принятая текущая сдача; null до первой сдачи. После сброса может быть заполнена при
-            canSubmit=true.
-          oneOf:
-            - $ref: '#/components/schemas/SubmissionReceipt'
-            - type: 'null'
-        title:
-          type: string
-        canSubmit:
-          type: boolean
-      required:
-        - title
-        - teacherFullName
-        - canSubmit
-        - currentSubmission
-    SubmissionReceipt:
-      type: object
-      additionalProperties: false
-      properties:
-        submissionId:
-          type: string
-          format: uuid
-        submittedAt:
-          type: string
-          format: date-time
-      required:
-        - submissionId
-        - submittedAt
-    Score:
-      type: object
-      additionalProperties: false
-      properties:
-        status:
-          type: string
-          enum:
-            - ok
-            - pending
-            - failed
-            - not_applicable
-        value:
-          type:
-            - number
-            - 'null'
-          minimum: 0
-          maximum: 1
-          description: Null except when status is ok.
-        reason:
-          type: object
-          additionalProperties: false
-          required:
-            - code
-            - message
-          properties:
-            code:
-              type: string
-              minLength: 1
-            message:
-              type: string
-              minLength: 1
-          description: Обязательна при failed; код ошибки и сообщение для пользователя.
-      required:
-        - status
-        - value
-      allOf:
-        - if:
-            properties:
-              status:
-                const: ok
-            required:
-              - status
-          then:
-            properties:
-              value:
-                type: number
-                minimum: 0
-                maximum: 1
-        - if:
-            properties:
-              status:
-                const: failed
-            required:
-              - status
-          then:
-            required:
-              - reason
-        - if:
-            properties:
-              status:
-                enum:
-                  - pending
-                  - failed
-                  - not_applicable
-            required:
-              - status
-          then:
-            properties:
-              value:
-                type: 'null'
-      description: >-
-        Сходство: pending, пока хотя бы одна требуемая пара ожидает обработки; после завершения всех
-        пар — failed при любой ошибке, иначе максимум успешных пар. Без пар — not_applicable. Для
-        риска pending имеет приоритет над failed, пока ожидается любая обязательная составляющая.
-        После завершения всех составляющих ошибка даёт failed, иначе вычисляется оценка по
-        policyVersion. При not_applicable сходстве используется AI.
-    SubmissionRow:
-      allOf:
-        - $ref: '#/components/schemas/SubmissionRowBase'
-      unevaluatedProperties: false
-    SubmissionList:
-      type: object
-      additionalProperties: false
-      properties:
-        page:
-          type: integer
-          minimum: 1
-        pageSize:
-          type: integer
-          minimum: 1
-          maximum: 100
-        total:
-          type: integer
-          minimum: 0
-          description: Число текущих работ задания до пагинации.
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/SubmissionRow'
-        policyVersion:
-          type: string
-          minLength: 1
-      required:
-        - items
-        - policyVersion
-        - page
-        - pageSize
-        - total
-    SimilarWork:
-      type: object
-      additionalProperties: false
-      description: >-
-        assignmentId — собственное задание похожей работы; используется для перехода к ней как к
-        основной.
-      properties:
-        submissionId:
-          type: string
-          format: uuid
-        assignmentId:
-          type: string
-          format: uuid
-        assignmentTitle:
-          type: string
-        score:
-          $ref: '#/components/schemas/Score'
-      required:
-        - submissionId
-        - assignmentId
-        - assignmentTitle
-        - score
-    SuspiciousRange:
-      type: object
-      additionalProperties: false
-      description: UTF-8 byte range in the submitted source; endIndex is exclusive.
-      properties:
-        startIndex:
-          type: integer
-          minimum: 0
-        endIndex:
-          type: integer
-          minimum: 1
-        confidence:
-          type: number
-          minimum: 0
-          maximum: 1
-      required:
-        - startIndex
-        - endIndex
-        - confidence
-    SubmissionDetail:
-      unevaluatedProperties: false
-      allOf:
-        - $ref: '#/components/schemas/SubmissionRowBase'
-        - type: object
-          properties:
-            suspicious:
-              type: array
-              description: Байтовые диапазоны UTF-8 от AI. Если ai.status не ok, массив пуст.
-              items:
-                $ref: '#/components/schemas/SuspiciousRange'
-            similar:
-              type: array
-              description: Most similar works, ordered by similarity descending with null scores last.
-              items:
-                $ref: '#/components/schemas/SimilarWork'
-          required:
-            - suspicious
-            - similar
-        - if:
-            properties:
-              ai:
-                properties:
-                  status:
-                    enum:
-                      - pending
-                      - failed
-                      - not_applicable
-                required:
-                  - status
-            required:
-              - ai
-          then:
-            properties:
-              suspicious:
-                maxItems: 0
-    MatchFragment:
-      type: object
-      additionalProperties: false
-      properties:
-        a:
-          $ref: '#/components/schemas/LineRange'
-        b:
-          $ref: '#/components/schemas/LineRange'
-      required:
-        - a
-        - b
-    LineRange:
-      type: array
-      minItems: 2
-      maxItems: 2
-      items:
-        type: integer
-        minimum: 1
-      description: '[первая строка, последняя строка], обе границы включены; первая не больше последней.'
-      example:
-        - 8
-        - 11
-    StructsimResult:
-      type: object
-      additionalProperties: false
-      properties:
-        details:
-          type: object
-          additionalProperties:
-            type: number
-          description: Дополнительные числовые показатели Structsim; набор определяется версией метода.
-        score:
-          $ref: '#/components/schemas/Score'
-        fragments:
-          type: array
-          items:
-            $ref: '#/components/schemas/MatchFragment'
-          description: Совпадения Structsim. Если score.status не ok, массив пуст.
-      required:
-        - score
-        - fragments
-        - details
-      allOf:
-        - if:
-            properties:
-              score:
-                properties:
-                  status:
-                    enum:
-                      - pending
-                      - failed
-                      - not_applicable
-                required:
-                  - status
-            required:
-              - score
-          then:
-            properties:
-              fragments:
-                maxItems: 0
-    PairResult:
-      type: object
-      additionalProperties: false
-      properties:
-        a:
-          type: string
-          format: uuid
-        b:
-          type: string
-          format: uuid
-        score:
-          $ref: '#/components/schemas/Score'
-        methods:
-          type: object
-          additionalProperties: false
-          properties:
-            structsim:
-              $ref: '#/components/schemas/StructsimResult'
-          required:
-            - structsim
-      required:
-        - a
-        - b
-        - score
-        - methods
-    Error:
-      type: object
-      additionalProperties: false
-      properties:
-        code:
-          type: string
-        message:
-          type: string
-        details:
-          type: object
-          additionalProperties: true
-      required:
-        - code
-        - message
-    AssignmentBase:
+          description: Исходный код в UTF-8
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Некорректный запрос
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Объект не найден
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Архив слишком большой
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          description: Сервис недоступен
+      tags:
+      - backend-controller
+components:
+  schemas:
+    Batch:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        title:
-          type: string
         createdAt:
           type: string
           format: date-time
+        id:
+          type: string
+          format: uuid
+        language:
+          type: string
+        pairCount:
+          type: integer
+          format: int32
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Run"
+        status:
+          type: string
+          enum:
+          - queued
+          - processing
+          - done
+          - failed
         submissionCount:
           type: integer
-          minimum: 0
-          description: Число текущих сдач задания, без истории замен и работ источников.
-        analysis:
-          $ref: '#/components/schemas/AssignmentAnalysisProgress'
+          format: int32
+        title:
+          type: string
       required:
-        - id
-        - title
-        - createdAt
-        - submissionCount
-        - analysis
-    SubmissionRowBase:
+      - createdAt
+      - id
+      - language
+      - pairCount
+      - runs
+      - status
+      - submissionCount
+      - title
+    Error:
       type: object
       properties:
-        studentId:
+        code:
           type: string
-          format: uuid
-        fullName:
+        details:
+          type: object
+          additionalProperties: {}
+        message:
           type: string
-          description: ФИО студента; frontend скрывает его до переключения «Показать ФИО».
-        submissionId:
+      required:
+      - code
+      - details
+      - message
+    Feedback:
+      type: object
+      properties:
+        comment:
           type: string
-          format: uuid
-        submittedAt:
+        decision:
+          type: string
+          enum:
+          - confirmed
+          - acceptable
+          - false_positive
+        updatedAt:
           type: string
           format: date-time
-        risk:
-          $ref: '#/components/schemas/Score'
-        similarity:
-          $ref: '#/components/schemas/Score'
-        ai:
-          $ref: '#/components/schemas/Score'
       required:
-        - submissionId
-        - studentId
-        - fullName
-        - submittedAt
-        - risk
-        - similarity
-        - ai
+      - comment
+      - decision
+      - updatedAt
+    FeedbackRequest:
+      type: object
+      properties:
+        comment:
+          type:
+          - string
+          - "null"
+          maxLength: 10000
+          minLength: 0
+        decision:
+          type: string
+          enum:
+          - confirmed
+          - acceptable
+          - false_positive
+      required:
+      - decision
+    Fragment:
+      type: object
+      properties:
+        a:
+          type: array
+          items:
+            type: integer
+            format: int32
+        b:
+          type: array
+          items:
+            type: integer
+            format: int32
+      required:
+      - a
+      - b
+    Match:
+      type: object
+      properties:
+        fragments:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchFragment"
+        score:
+          type: number
+          format: double
+        with:
+          type: string
+      required:
+      - fragments
+      - score
+      - with
+    MatchFragment:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            type: integer
+            format: int32
+        withLines:
+          type: array
+          items:
+            type: integer
+            format: int32
+      required:
+      - lines
+      - withLines
+    PairDetail:
+      type: object
+      properties:
+        a:
+          type: string
+          format: uuid
+        b:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+          format: uuid
+        decision:
+          type:
+          - string
+          - "null"
+          enum:
+          - confirmed
+          - acceptable
+          - false_positive
+          - null
+        feedback:
+          anyOf:
+          - $ref: "#/components/schemas/Feedback"
+          - type: "null"
+        id:
+          type: string
+        scores:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/PairScore"
+        submissions:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/SubmissionInfo"
+      required:
+      - a
+      - b
+      - batchId
+      - decision
+      - feedback
+      - id
+      - scores
+      - submissions
+    PairScore:
+      type: object
+      properties:
+        details:
+          type: object
+          additionalProperties: {}
+        fragments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fragment"
+        reason:
+          anyOf:
+          - $ref: "#/components/schemas/Reason"
+          - type: "null"
+        value:
+          type:
+          - number
+          - "null"
+          format: double
+      required:
+      - details
+      - fragments
+      - reason
+      - value
+    PairSummary:
+      type: object
+      properties:
+        a:
+          type: string
+          format: uuid
+        b:
+          type: string
+          format: uuid
+        decision:
+          type:
+          - string
+          - "null"
+          enum:
+          - confirmed
+          - acceptable
+          - false_positive
+          - null
+        id:
+          type: string
+        scores:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/PairScore"
+      required:
+      - a
+      - b
+      - decision
+      - id
+      - scores
+    Pairs:
+      type: object
+      properties:
+        pairs:
+          type: array
+          items:
+            $ref: "#/components/schemas/PairSummary"
+        total:
+          type: integer
+          format: int32
+      required:
+      - pairs
+      - total
+    Reason:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type:
+          - string
+          - "null"
+      required:
+      - code
+    Run:
+      type: object
+      properties:
+        error:
+          type:
+          - string
+          - "null"
+        failed:
+          type:
+          - integer
+          - "null"
+          format: int32
+        finishedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+        method:
+          type: string
+          enum:
+          - jplag
+          - structsim
+        methodVersion:
+          type:
+          - string
+          - "null"
+        parsed:
+          type:
+          - integer
+          - "null"
+          format: int32
+        startedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - done
+          - failed
+      required:
+      - error
+      - failed
+      - finishedAt
+      - method
+      - methodVersion
+      - parsed
+      - startedAt
+      - status
+    Submission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        language:
+          type: string
+        loc:
+          type: integer
+          format: int32
+        methods:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/SubmissionMethod"
+        originalName:
+          type: string
+      required:
+      - id
+      - language
+      - loc
+      - methods
+      - originalName
+    SubmissionInfo:
+      type: object
+      properties:
+        language:
+          type: string
+        loc:
+          type: integer
+          format: int32
+        originalName:
+          type: string
+      required:
+      - language
+      - loc
+      - originalName
+    SubmissionMethod:
+      type: object
+      properties:
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/Match"
+        reason:
+          anyOf:
+          - $ref: "#/components/schemas/Reason"
+          - type: "null"
+        score:
+          type:
+          - number
+          - "null"
+          format: double
+        stats:
+          type: object
+          additionalProperties: {}
+        status:
+          type: string
+          enum:
+          - pending
+          - ok
+          - failed
+      required:
+      - matches
+      - reason
+      - score
+      - stats
+      - status
+    Submissions:
+      type: object
+      properties:
+        submissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Submission"
+        total:
+          type: integer
+          format: int32
+      required:
+      - submissions
+      - total

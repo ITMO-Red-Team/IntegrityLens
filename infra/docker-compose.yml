@@ -1,6 +1,6 @@
 name: integritylens
 
-x-structsim-worker: &structsim-worker
+x-worker: &worker
   # Воркер запускает core, у того свои дети; убитых потомков кто-то должен забирать.
   init: true
   environment: &worker-env
@@ -86,8 +86,21 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Текущий API создаёт оба метода. Удалять JPlag нужно вместе с переходом API
+  # и проверок CI на новый контракт Structsim + AI.
+  worker-jplag:
+    <<: *worker
+    image: integritylens-worker-jplag:0.2.0
+    build:
+      context: ..
+      dockerfile: worker/Dockerfile
+      target: jplag
+    environment:
+      <<: *worker-env
+      WORKER_METHOD: jplag
+
   worker-structsim:
-    <<: *structsim-worker
+    <<: *worker
     image: integritylens-worker-structsim:0.2.0
     build:
       context: ..

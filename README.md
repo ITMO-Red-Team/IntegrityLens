@@ -1,5 +1,11 @@
 # IntegrityLens
 
+## Документация
+
+Сайт документации собирается на MkDocs. Локальный просмотр и настройка
+GitHub Pages описаны в [docs/contributing.md](docs/contributing.md).
+Конфигурация сайта — [mkdocs.yml](mkdocs.yml).
+
 Бэкенд сравнения Java-работ: API, два воркера (JPlag и structsim), PostgreSQL и MinIO.
 
 ## Запуск

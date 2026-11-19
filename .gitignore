@@ -10,3 +10,6 @@ reports/
 .DS_Store
 .idea/
 .vscode/
+site/
+.venv-docs/
+.tools/

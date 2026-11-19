@@ -1,0 +1,45 @@
+site_name: IntegrityLens
+site_description: Документация сервиса анализа учебных работ
+site_url: https://itmo-red-team.github.io/IntegrityLens/
+repo_url: https://github.com/ITMO-Red-Team/IntegrityLens
+repo_name: ITMO-Red-Team/IntegrityLens
+docs_dir: docs
+site_dir: site
+theme:
+  name: material
+  language: ru
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Тёмная тема
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Светлая тема
+plugins:
+  - search:
+      lang: [ru, en]
+nav:
+  - Главная: index.md
+  - Модель данных: data-model.md
+  - Архитектура: architecture.md
+  - API контракты: contracts.md
+  - Работа с документацией: contributing.md
+markdown_extensions:
+  - admonition
+  - tables
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+exclude_docs: |
+  README.md
+  samples/

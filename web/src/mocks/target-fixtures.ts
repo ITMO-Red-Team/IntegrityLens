@@ -3,6 +3,8 @@ import type {
   AssignmentSummary,
   SubmissionList,
   Score,
+  SubmissionDetail,
+PairResult,
 } from "../api/target/types";
 
 export type MockScenario =
@@ -151,3 +153,77 @@ export const mockSubmissions: Record<string, SubmissionList> = {
     ],
   },
 };
+
+
+export const mockSubmissionDetails: Record<
+  string,
+  SubmissionDetail
+> = {};
+
+for (const assignment of mockAssignments) {
+  const submissions =
+    mockSubmissions[assignment.id]?.items ?? [];
+
+  for (const submission of submissions) {
+    mockSubmissionDetails[submission.submissionId] = {
+      ...submission,
+      suspicious:
+        submission.ai.status === "ok"
+          ? [
+              {
+                startIndex: 10,
+                endIndex: 45,
+                confidence: 0.85,
+              },
+            ]
+          : [],
+      similar: submissions
+        .filter(
+          (other) =>
+            other.submissionId !== submission.submissionId,
+        )
+        .map((other) => ({
+          submissionId: other.submissionId,
+          assignmentId: assignment.id,
+          assignmentTitle: assignment.title,
+          score: submission.similarity,
+        })),
+    };
+  }
+}
+
+export function createMockPair(
+  a: string,
+  b: string,
+  scenario: MockScenario,
+): PairResult {
+  const score =
+    scenario === "pending"
+      ? SCORES.pending
+      : scenario === "error"
+        ? SCORES.failed
+        : scenario === "empty"
+          ? SCORES.notApplicable
+          : SCORES.success;
+
+  return {
+    a,
+    b,
+    score,
+    methods: {
+      structsim: {
+        score,
+        details: {},
+        fragments:
+          score.status === "ok"
+            ? [
+                {
+                  a: [5, 15],
+                  b: [8, 18],
+                },
+              ]
+            : [],
+      },
+    },
+  };
+}

@@ -1,10 +1,19 @@
+
 name: web
 
 on:
   push:
-    paths: ["web/**", "api/openapi.yaml", ".github/workflows/web.yml"]
+    paths:
+      - "web/**"
+      - "api/openapi.yaml"
+      - "docs/openapi.yaml"
+      - ".github/workflows/web.yml"
   pull_request:
-    paths: ["web/**", "api/openapi.yaml", ".github/workflows/web.yml"]
+    paths:
+      - "web/**"
+      - "api/openapi.yaml"
+      - "docs/openapi.yaml"
+      - ".github/workflows/web.yml"
 
 defaults:
   run:
@@ -13,6 +22,7 @@ defaults:
 jobs:
   check:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -25,16 +35,22 @@ jobs:
       - name: Установка зависимостей
         run: npm ci
 
-      - name: Типы фронта совпадают с api/openapi.yaml
+      - name: Проверка текущего API-контракта
         run: |
           npm run gen:api
-          git diff --exit-code src/api/schema.ts || (echo "Контракт api изменился: выполните npm run gen:api и закоммитьте src/api/schema.ts" && exit 1)
+          git diff --exit-code -- src/api/schema.ts
+
+      - name: Проверка нового API-контракта
+        run: |
+          npm run gen:api:target
+          git diff --exit-code -- src/api/target/schema.ts
 
       - name: Проверка типов
         run: npm run typecheck
 
-      - name: Тесты (отчёт JUnit сохраняется как артефакт)
-        run: npm test -- --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml
+      - name: Тесты
+        run: |
+          npm test -- --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml
 
       - name: Сборка
         run: npm run build
@@ -43,7 +59,7 @@ jobs:
         run: docker build -t integritylens-web:ci .
 
       - name: Сохранить результаты тестов
-        if: always()
+        if: always
         uses: actions/upload-artifact@v4
         with:
           name: web-test-reports

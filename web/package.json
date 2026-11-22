@@ -10,8 +10,8 @@
   "preview": "vite preview",
   "typecheck": "tsc --noEmit",
   "test": "vitest run",
-  "gen:api:target": "openapi-typescript ../docs/openapi.yaml -o src/api/target/schema.ts",
-  "gen:contract": "openapi-typescript ../docs/openapi.yaml -o src/api/contract-schema.ts"
+  "gen:api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.ts",
+  "gen:api:target": "openapi-typescript ../docs/openapi.yaml -o src/api/target/schema.ts"
 },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",

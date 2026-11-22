@@ -1,38 +1,148 @@
-# web
 
-Страница: загрузка архива, таблица работ, просмотр пары файлов.
+# IntegrityLens Web
 
-- Ничего не импортирует из проекта.
-- Общается только с `api`. Контракт — `api/openapi.yaml`, типы фронта генерируются из него.
-- Поднимается в Docker.
+Frontend приложения IntegrityLens.
 
 ## Стек
 
-React 18 + TypeScript, Vite, React Router, TanStack Query, Tailwind CSS. Моки API — MSW.
+- React 18
+- TypeScript
+- Vite
+- React Router
+- TanStack Query
+- Tailwind CSS
+- MSW (Mock Service Worker)
+- Vitest
 
 ## Запуск
 
-Нужен Node.js 24.
+Требуется Node.js 24.
 
 ```bash
 cd web
 npm ci
-npm run dev        # http://localhost:5173 — на моках, api не нужен
-npm run dev:api    # http://localhost:5173 — с настоящим api на localhost:8080
+npm run dev
 ```
 
-Для `dev:api` бэкенд должен быть поднят: `docker compose -f infra/docker-compose.yml up --build -d`.
+Frontend: http://localhost:5173
 
-## Контракт с api
+По умолчанию используются MSW-моки.
 
-Когда меняется `api/openapi.yaml`:
+Для подключения существующего backend:
 
 ```bash
-npm run gen:api    # обновляет src/api/schema.ts
-npm run typecheck  # покажет места, которые нужно поправить
+npm run dev:api
 ```
 
-CI падает, если `src/api/schema.ts` не совпадает с `api/openapi.yaml`.
+Backend должен быть запущен на localhost:8080.
+
+## API-контракты
+
+На этапе миграции поддерживаются два контракта.
+
+### Текущий API
+
+Источник:
+
+`api/openapi.yaml`
+
+Сгенерированные типы:
+
+`web/src/api/schema.ts`
+
+Генерация:
+
+```bash
+npm run gen:api
+```
+
+Используется существующими экранами.
+
+### Новый API
+
+Источник:
+
+`docs/openapi.yaml`
+
+Сгенерированные типы:
+
+`web/src/api/target/schema.ts`
+
+Генерация:
+
+```bash
+npm run gen:api:target
+```
+
+Связанные файлы:
+
+- `src/api/target/types.ts` — типы
+- `src/api/target/client.ts` — HTTP-клиент
+- `src/api/target/hooks.ts` — React Query
+
+Сгенерированные schema.ts не редактируются вручную.
+
+## Моки нового API
+
+MSW-обработчики:
+
+`src/mocks/target-handlers.ts`
+
+Тестовые данные:
+
+`src/mocks/target-fixtures.ts`
+
+Автоматические тесты:
+
+`src/mocks/target-handlers.test.ts`
+
+### Сценарии
+
+| Сценарий | Описание |
+|---|---|
+| success | Проверка завершена |
+| empty | Нет сдач |
+| pending | Анализ выполняется |
+| error | Ошибка анализа |
+
+В новом API Structsim и AI имеют независимые состояния.
+
+Статусы Score:
+
+- `ok` — результат готов
+- `pending` — анализ выполняется
+- `failed` — ошибка анализа
+- `not_applicable` — оценка неприменима
+
+При `ok` значение находится в диапазоне 0–1.
+
+При остальных статусах `value` равен null.
+
+Для `failed` указывается причина ошибки.
+
+### Демо-задания
+
+MSW предоставляет фиксированные задания для каждого
+из четырёх сценариев.
+
+Основные маршруты:
+
+- GET /api/assignments
+- GET /api/assignments/{assignmentId}
+- GET /api/assignments/{assignmentId}/submissions
+- GET /api/assignments/{assignmentId}/submissions/{submissionId}
+- GET /api/assignments/{assignmentId}/pairs/{a}/{b}
+
+Для проверки HTTP-ошибки списка заданий используется
+параметр `mockHttpError=1`.
+
+Для пустого списка заданий — `mockScenario=empty`.
+
+Тесты проверяют успешные, пустые, выполняющиеся и
+ошибочные состояния.
+
+Остальные операции нового API добавляются по мере
+реализации соответствующей функциональности.
 
 ## Проверки
 
@@ -44,24 +154,30 @@ npm run build
 
 ## Docker
 
+С моками:
+
 ```bash
-docker build -t integritylens-web ./web                                   # демо на моках
-docker build --build-arg VITE_USE_MOCKS=false -t integritylens-web ./web  # с api
+docker build -t integritylens-web ./web
 ```
 
-В режиме с api nginx пересылает `/api/*` на сервис `api:8080` из `infra/docker-compose.yml`.
+С настоящим API:
 
-## Как устроено
+```bash
+docker build --build-arg VITE_USE_MOCKS=false -t integritylens-web ./web
+```
 
-| Папка | Что внутри |
-|---|---|
-| `src/api` | `schema.ts` (сгенерирован), короткие типы, клиент запросов, хуки React Query |
-| `src/features/upload` | загрузка архива, страница пакета со статусами методов |
-| `src/features/queue` | очередь: сортировка по методу, порог, K, кластеры |
-| `src/features/compare` | два исходника пары рядом и оценки методов |
-| `src/lib` | логика очереди, подписи работ S-001… |
-| `src/mocks` | моки api в формате `api/openapi.yaml`, эталонный движок сходства |
+## CI
 
-- Оценки JPlag и structsim не объединяются: очередь сортируется по выбранному методу (`?method=`).
-- В api работа — это UUID, а исходное имя файла может содержать ФИО. Поэтому в интерфейсе работы подписаны S-001, S-002… по порядку из api, а имя файла показывается по клику.
-- Сортировку, порог и кластеры считает фронт, как требует контракт.
+GitHub Actions выполняет:
+
+1. Установку зависимостей.
+2. Генерацию типов текущего API.
+3. Генерацию типов нового API.
+4. Проверку синхронизации схем.
+5. Проверку TypeScript.
+6. Запуск тестов.
+7. Production build.
+8. Сборку Docker-образа.
+
+При расхождении сгенерированных типов с OpenAPI CI
+завершится ошибкой.

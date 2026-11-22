@@ -3,9 +3,9 @@ info:
   title: IntegrityLens API
   version: 1.0.0
   description: |-
-    API for Java assignment submissions and integrity analysis. JPlag is not part
-    of this contract; pair similarity is provided by structsim and per-submission
-    AI analysis. Analysis runs asynchronously, so scores may be pending.
+    API заданий и сдач Java-работ. Structsim рассчитывает сходство, AI-детектор —
+    признаки машинного происхождения. Оценки независимы, общего показателя нет.
+    Каждый метод имеет собственные состояния ожидания, успеха и ошибки.
 servers:
   - url: /
 tags:
@@ -71,9 +71,9 @@ paths:
       description: >-
         Создаёт сессию на 24 часа без продления при обращениях. Каждый успешный
 
-        вход выдаёт новый токен. Пароль проверяется без обрезки пробелов и изменения регистра.
-        Успешный вход аннулирует прежнюю сессию, переданную в cookie этого браузера. Сессии других
-        устройств сохраняются. Неуспешный вход не меняет действующие сессии.
+        вход выдаёт новый токен. Пароль проверяется без обрезки пробелов и изменения регистра. Успешный вход
+        аннулирует прежнюю сессию, переданную в cookie этого браузера. Сессии других устройств сохраняются.
+        Неуспешный вход не меняет действующие сессии.
       requestBody:
         required: true
         content:
@@ -241,8 +241,8 @@ paths:
       operationId: deleteAssignment
       summary: Remove an assignment from the teacher's active list
       description: >-
-        Скрывает задание, закрывает ссылку и исключает его из источников с пересчётом сходства
-        зависимых заданий. Сдачи хранятся три года. Повтор удаления своего задания возвращает 204.
+        Скрывает задание, закрывает ссылку и исключает его из источников с пересчётом сходства зависимых
+        заданий. Сдачи хранятся три года. Повтор удаления своего задания возвращает 204.
       responses:
         '204':
           description: Assignment removed.
@@ -265,8 +265,8 @@ paths:
       operationId: updateAssignmentSources
       summary: Replace the assignment's source assignments
       description: >-
-        Источники — другие неудалённые задания этого преподавателя. Изменение набора пересчитывает
-        сходство, но не AI. Неизменный набор не меняет ревизию; название и ссылка сохраняются.
+        Источники — другие неудалённые задания этого преподавателя. Изменение набора пересчитывает сходство,
+        но не AI. Неизменный набор не меняет ревизию; название и ссылка сохраняются.
       requestBody:
         required: true
         content:
@@ -305,10 +305,10 @@ paths:
       operationId: resetStudentAttempt
       summary: Reset a student's submission attempt
       description: >-
-        Открывает повторную сдачу без удаления текущей работы, изменения ревизии или пересчёта.
-        Повтор уже открытой попытки возвращает 204; отсутствие текущей сдачи студента — 404.
-        expectedSubmissionId должен совпадать с current_submission_id. Проверка и открытие попытки
-        атомарны; несовпадение — 409 SUBMISSION_CHANGED без изменения попытки.
+        Открывает повторную сдачу без удаления текущей работы, изменения ревизии или пересчёта. Повтор уже
+        открытой попытки возвращает 204; отсутствие текущей сдачи студента — 404. expectedSubmissionId должен
+        совпадать с current_submission_id. Проверка и открытие попытки атомарны; несовпадение — 409
+        SUBMISSION_CHANGED без изменения попытки.
       responses:
         '204':
           description: Attempt reset.
@@ -353,12 +353,8 @@ paths:
       operationId: listAssignmentSubmissions
       summary: Получить список работ с оценками и данными студентов
       description: >-
-        Defaults to risk ordering. Scores are sorted descending, null scores last;
-
-        ties are ordered by submission UUID ascending. Submissions with pending
-
-        scores appear at the end for the selected score. studentId and fullName are returned; the
-        frontend controls name visibility.
+        Оценки Structsim и AI независимы. По умолчанию сортировка по similarity; по убыванию, null в конце,
+        при равенстве UUID по возрастанию. Сортировка перед пагинацией. ФИО скрывает frontend.
       parameters:
         - name: sort
           in: query
@@ -367,10 +363,9 @@ paths:
           schema:
             type: string
             enum:
-              - risk
               - similarity
               - ai
-            default: risk
+            default: similarity
         - name: page
           in: query
           schema:
@@ -388,7 +383,7 @@ paths:
           description: Число работ на странице. Сортировка применяется ко всему списку до пагинации.
       responses:
         '200':
-          description: Ranked rows and the active analysis policy version.
+          description: Страница работ с независимыми оценками Structsim и AI и общим числом работ.
           content:
             application/json:
               schema:
@@ -505,9 +500,8 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
       description: >-
-        Только преподаватель-владелец. Доступны текущие сдачи неудалённых заданий. Заменённые сдачи
-        и сдачи удалённых заданий возвращают 404; хранение истории не предоставляет к ней публичного
-        API.
+        Только преподаватель-владелец. Доступны текущие сдачи неудалённых заданий. Заменённые сдачи и сдачи
+        удалённых заданий возвращают 404; хранение истории не предоставляет к ней публичного API.
   /api/submit/{token}:
     parameters:
       - name: token
@@ -609,8 +603,8 @@ components:
   headers:
     SessionCookie:
       description: >-
-        session=<opaque-token>; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax. Серверный
-        срок действия — 24 часа с момента входа.
+        session=<opaque-token>; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax. Серверный срок действия
+        — 24 часа с момента входа.
       schema:
         type: string
   parameters:
@@ -660,8 +654,8 @@ components:
             $ref: '#/components/schemas/Error'
     NotFound:
       description: >-
-        Resource is unavailable or not found. Resources outside the teacher's ownership scope are
-        reported as not found.
+        Resource is unavailable or not found. Resources outside the teacher's ownership scope are reported as
+        not found.
       content:
         application/json:
           schema:
@@ -769,8 +763,8 @@ components:
           format: email
           maxLength: 320
           description: >-
-            Перед проверкой и поиском: удалить пробелы по краям и привести весь email к нижнему
-            регистру. Уникальность проверяется по нормализованному значению.
+            Перед проверкой и поиском: удалить пробелы по краям и привести весь email к нижнему регистру.
+            Уникальность проверяется по нормализованному значению.
         password:
           type: string
           format: password
@@ -794,8 +788,8 @@ components:
           format: email
           maxLength: 320
           description: >-
-            Перед проверкой и поиском: удалить пробелы по краям и привести весь email к нижнему
-            регистру. Уникальность проверяется по нормализованному значению.
+            Перед проверкой и поиском: удалить пробелы по краям и привести весь email к нижнему регистру.
+            Уникальность проверяется по нормализованному значению.
         password:
           type: string
           format: password
@@ -816,8 +810,10 @@ components:
         - completed
         - failed
       description: |-
-        Прогресс анализа текущих сдач по актуальной ревизии. completed включает
-        работы с ошибками обязательного анализа. failed — их число внутри completed.
+        Прогресс анализа текущих сдач по актуальной ревизии. Работа входит в completed,
+        когда обе оценки имеют терминальное состояние ok, failed или not_applicable.
+        Если хотя бы одна оценка pending, работа не завершена. failed — число завершённых
+        работ с хотя бы одной ошибочной оценкой. Ошибка одного метода не скрывает другой.
         0 <= failed <= completed <= submissionCount. При пересчёте completed может уменьшиться.
       properties:
         completed:
@@ -854,8 +850,8 @@ components:
           minLength: 1
           pattern: \S
           description: >-
-            Пробелы по краям удаляются перед проверкой. Длина после удаления пробелов — 1–200
-            символов Unicode. После создания название неизменно.
+            Пробелы по краям удаляются перед проверкой. Длина после удаления пробелов — 1–200 символов
+            Unicode. После создания название неизменно.
         sourceAssignmentIds:
           type: array
           uniqueItems: true
@@ -983,11 +979,9 @@ components:
               value:
                 type: 'null'
       description: >-
-        Сходство: pending, пока хотя бы одна требуемая пара ожидает обработки; после завершения всех
-        пар — failed при любой ошибке, иначе максимум успешных пар. Без пар — not_applicable. Для
-        риска pending имеет приоритет над failed, пока ожидается любая обязательная составляющая.
-        После завершения всех составляющих ошибка даёт failed, иначе вычисляется оценка по
-        policyVersion. При not_applicable сходстве используется AI.
+        Независимая оценка метода. Для Structsim: pending до завершения всех требуемых пар, затем failed при
+        любой ошибке, иначе максимум успешных пар. Без кандидатов — not_applicable. AI имеет собственное
+        состояние и не зависит от Structsim.
     SubmissionRow:
       allOf:
         - $ref: '#/components/schemas/SubmissionRowBase'
@@ -1011,21 +1005,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SubmissionRow'
-        policyVersion:
-          type: string
-          minLength: 1
       required:
         - items
-        - policyVersion
         - page
         - pageSize
         - total
     SimilarWork:
       type: object
       additionalProperties: false
-      description: >-
-        assignmentId — собственное задание похожей работы; используется для перехода к ней как к
-        основной.
+      description: assignmentId — собственное задание похожей работы; используется для перехода к ней как к основной.
       properties:
         submissionId:
           type: string
@@ -1234,8 +1222,6 @@ components:
         submittedAt:
           type: string
           format: date-time
-        risk:
-          $ref: '#/components/schemas/Score'
         similarity:
           $ref: '#/components/schemas/Score'
         ai:
@@ -1245,6 +1231,5 @@ components:
         - studentId
         - fullName
         - submittedAt
-        - risk
         - similarity
         - ai

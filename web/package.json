@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:api": "vite --mode api",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "gen:api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.ts"
-  },
+  "dev": "vite",
+  "dev:api": "vite --mode api",
+  "build": "tsc --noEmit && vite build",
+  "preview": "vite preview",
+  "typecheck": "tsc --noEmit",
+  "test": "vitest run",
+  "gen:api:target": "openapi-typescript ../docs/openapi.yaml -o src/api/target/schema.ts",
+  "gen:contract": "openapi-typescript ../docs/openapi.yaml -o src/api/contract-schema.ts"
+},
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
     "highlight.js": "^11.12.0",

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["contract", "runId", "methodVersion", "params", "inputFiles"],
+  "additionalProperties": false,
+  "properties": {
+    "contract": {"const": "integritylens.ai/1"},
+    "runId": {"type": "string", "format": "uuid"},
+    "methodVersion": {"type": "string", "minLength": 1},
+    "params": {"type": "object"},
+    "inputFiles": {
+      "type": "array", "minItems": 1, "maxItems": 50,
+      "items": {
+        "type": "object", "required": ["submissionId", "path"], "additionalProperties": false,
+        "properties": {
+          "submissionId": {"type": "string", "format": "uuid"},
+          "path": {"$ref": "#/$defs/path"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "path": {
+      "type": "string", "minLength": 1, "maxLength": 300,
+      "pattern": "^[^\\\\/]+(/[^\\\\/]+)*\\.java$",
+      "not": {"pattern": "(^|/)\\.\\.?(/|$)"}
+    }
+  }
+}

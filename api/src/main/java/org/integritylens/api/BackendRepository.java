@@ -18,7 +18,7 @@ public class BackendRepository {
     record BatchRow(UUID id, String title, String language, int count, Instant createdAt) {}
     record SubmissionRow(UUID id, UUID batchId, String name, String language, int loc, String storageKey) {}
     record RunRow(UUID id, String method, String version, String status, Instant startedAt,
-            Instant finishedAt, String error, String result) {}
+            Instant finishedAt, String error, String result, UUID submissionId) {}
     record FeedbackRow(UUID a, UUID b, Feedback value) {}
 
     public BackendRepository(JdbcTemplate jdbc) {
@@ -52,6 +52,11 @@ public class BackendRepository {
         jdbc.update("insert into runs(id, batch_id, method) values (?, ?, ?)", UUID.randomUUID(), batchId, method);
     }
 
+    void createRun(UUID batchId, String method, UUID submissionId) {
+        jdbc.update("insert into runs(id, batch_id, method, submission_id) values (?, ?, ?, ?)",
+                UUID.randomUUID(), batchId, method, submissionId);
+    }
+
     BatchRow batch(UUID id) {
         return jdbc.query("select * from batches where id = ?", (rs, n) -> batchRow(rs), id)
                 .stream().findFirst().orElseThrow(ApiException::notFound);
@@ -75,7 +80,7 @@ public class BackendRepository {
         return jdbc.query("select * from runs where batch_id = ? order by method", (rs, n) -> new RunRow(
                 rs.getObject("id", UUID.class), rs.getString("method"), rs.getString("method_version"),
                 rs.getString("status"), instant(rs, "started_at"), instant(rs, "finished_at"),
-                rs.getString("error"), rs.getString("result")), batchId);
+                rs.getString("error"), rs.getString("result"), rs.getObject("submission_id", UUID.class)), batchId);
     }
 
     List<FeedbackRow> feedback(UUID batchId) {

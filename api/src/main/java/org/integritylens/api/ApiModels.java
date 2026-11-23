@@ -17,7 +17,7 @@ public final class ApiModels {
             Instant createdAt, int submissionCount, int pairCount, List<Run> runs) {}
 
     @Schema(requiredProperties = {"method", "methodVersion", "status", "startedAt", "finishedAt", "parsed", "failed", "error"})
-    public record Run(@Schema(allowableValues = {"jplag", "structsim"}) String method,
+    public record Run(@Schema(allowableValues = {"jplag", "structsim", "ai"}) String method,
             @Schema(nullable = true) String methodVersion,
             @Schema(allowableValues = {"queued", "running", "done", "failed"}) String status,
             @Schema(nullable = true) Instant startedAt, @Schema(nullable = true) Instant finishedAt,
@@ -67,4 +67,9 @@ public final class ApiModels {
             List<Fragment> fragments, Reason reason) {}
     public record CoreResult(String contract, String method, String methodVersion, Map<String, Object> params,
             List<CoreSubmission> submissions, List<CorePair> pairs, List<String> warnings) {}
+    public record SuspiciousRange(int startIndex, int endIndex, double confidence) {}
+    public record AiFile(String submissionId, String status, Double score,
+            List<SuspiciousRange> suspicious, Reason reason) {}
+    public record AiResult(String contract, String runId, String methodVersion, Map<String, Object> params,
+            List<AiFile> files) {}
 }

@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class UploadService {
     private static final Logger LOG = LoggerFactory.getLogger(UploadService.class);
     static final List<String> METHODS = List.of("jplag", "structsim");
+    static final String AI_METHOD = "ai";
     private final BackendRepository repository;
     private final ObjectStorage storage;
     private final ArchiveReader reader;
@@ -61,8 +62,10 @@ public class UploadService {
                 uploaded.add(archiveKey);
                 storage.put(archiveKey, bytes, "application/zip");
                 repository.createBatch(batchId, batchTitle, language, filename, hash, sources.size());
+                List<UUID> submissionIds = new ArrayList<>();
                 for (var source : sources) {
                     UUID id = UUID.randomUUID();
+                    submissionIds.add(id);
                     String key = "batches/" + batchId + "/submissions/" + id + "/source.java";
                     uploaded.add(key);
                     storage.put(key, source.bytes(), "text/plain; charset=utf-8");
@@ -70,6 +73,9 @@ public class UploadService {
                 }
                 for (String method : METHODS) {
                     repository.createRun(batchId, method);
+                }
+                for (UUID submissionId : submissionIds) {
+                    repository.createRun(batchId, AI_METHOD, submissionId);
                 }
                 LOG.atInfo().addKeyValue("batchId", batchId).log("Batch uploaded");
                 return new Upload(batchId, true);

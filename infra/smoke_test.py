@@ -127,6 +127,7 @@ def main():
     assert all(r["parsed"] == 5 and r["failed"] == 0 for r in batch["runs"]), batch
     versions = {r["method"]: r["methodVersion"] for r in batch["runs"]}
     assert versions["jplag"].startswith(("jplag-", "mock-")) and versions["structsim"].startswith(("structsim-", "mock-"))
+    assert versions["ai"].startswith(("aicode-", "aicode-mock/")), versions
     status, submissions = request(base, f"/api/batches/{batch_id}/submissions")
     validate(submissions, "Submissions")
     assert status == 200 and submissions["total"] == 5
@@ -141,6 +142,11 @@ def main():
     assert pairs == request(base, f"/api/batches/{batch_id}/pairs")[1]
     for submission in submissions["submissions"]:
         for method, result in submission["methods"].items():
+            # AI не парный метод: в pairs его нет.
+            if method == "ai":
+                assert result["status"] == "ok" and 0 <= result["score"] <= 1, result
+                assert result["matches"] == [], result
+                continue
             scores = [p["scores"][method]["value"] for p in pairs["pairs"] if submission["id"] in (p["a"], p["b"])]
             assert result["score"] == max(scores)
             assert [m["score"] for m in result["matches"]] == sorted(scores, reverse=True)[:3]
@@ -149,6 +155,8 @@ def main():
         names = {s["id"]: s["originalName"] for s in submissions["submissions"]}
         copy = next(p for p in pairs["pairs"] if {names[p["a"]], names[p["b"]]} == {"folder/Main0.java", "folder/Main1.java"})
         for method in versions:
+            if method == "ai":
+                continue  # AI не парный метод
             assert copy["scores"][method]["value"] == 1.0, copy
             detail = request(base, f"/api/pairs/{copy['id']}")[1]["scores"][method]
             assert detail["fragments"] and all(line >= 1 for f in detail["fragments"] for line in f["a"] + f["b"]), detail

@@ -36,6 +36,7 @@ compose=(docker compose --env-file "$1/.env" -f infra/docker-compose.yml)
 "${compose[@]}" build minio-init
 "${compose[@]}" build worker-jplag
 "${compose[@]}" build worker-structsim
+"${compose[@]}" build worker-ai
 "${compose[@]}" build web
 "${compose[@]}" up -d --wait --wait-timeout 240
 "${compose[@]}" ps

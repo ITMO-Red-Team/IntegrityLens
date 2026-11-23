@@ -11,14 +11,6 @@ docker compose --env-file .env -f infra/docker-compose.yml up --build -d
 Старый том PostgreSQL 16 требует переноса через `pg_dump`/restore перед запуском версии 18.
 При `SIGILL` во время сборки в x86 VM на ARM задайте `JAVA_BUILD_OPTS=-Xint`.
 
-`worker-ai` тянет модель GigaCheck (~1.6 ГБ) из [релиза репозитория](https://github.com/ITMO-Red-Team/IntegrityLens/releases/tag/aicode-model-v0.1.0)
-при сборке; на самопроверку образа нужно ~5.5 ГБ памяти. Смена версии модели — переменные
-`AICODE_MODEL_URL` и `AICODE_MODEL_SHA256`. Настоящий AI-движок считает ~2 мин на каждую
-сдачу (нужно 5 ГБ памяти), поэтому в проверках ниже он работает на моке: `AICODE_ENGINE=mock`
-(не задевает методы сравнения). Пакет остаётся `processing`, пока не завершатся все AI-прогоны,
-но фронт открывает очередь и сравнение, как только готов любой из методов сравнения. Время и
-потоки — в [worker/ai/README.md](../worker/ai/README.md#ресурсы-и-время).
-
 ## Проверки
 
 Из корня, с Python и зависимостями из `infra/requirements.txt`:

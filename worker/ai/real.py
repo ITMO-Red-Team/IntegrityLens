@@ -14,9 +14,12 @@ from .version import DEFAULT_MODEL_DIR, method_version
 # Ошибка файла — не ошибка прогона: done допускает ошибки отдельных файлов.
 NOT_PARSED = "NOT_PARSED"
 TOOL_ERROR = "TOOL_ERROR"
-# Число потоков фиксировано и не равно числу ядер машины: один поток медленнее
-# вчетверо, а оценка не должна зависеть от того, сколько ядер досталось воркеру.
-DEFAULT_THREADS = 4
+# Потоки — вычислительный ресурс, а не часть оценки: один поток медленнее
+# вчетверо, и до 16 потоков время падает почти линейно, дальше (hyper-threading
+# + E-ядра) только хуже. Байтовые фрагменты чуть меняются между числами потоков
+# (порядок суммирования в GEMM, ≤1 п.п. flagged на пробах), один и тот же конфиг
+# воспроизводим бит в бит; порог отсечения 0.05 эти сдвиги не замечает.
+DEFAULT_THREADS = 16
 NEWLINE = re.compile(r"(\r\n?)")  # группа — чтобы split вернул и переводы строк
 
 _MODEL = None
@@ -42,7 +45,8 @@ def _load():
         import torch
         from aicode import detector
 
-        torch.set_num_threads(int(os.environ.get("AICODE_THREADS", DEFAULT_THREADS)))
+        torch.set_num_threads(min(int(os.environ.get("AICODE_THREADS", DEFAULT_THREADS)),
+                                  os.cpu_count() or DEFAULT_THREADS))
         model_dir = os.environ.get("AICODE_MODEL_DIR", DEFAULT_MODEL_DIR)
         model, tokenizer, torch = detector.load_model(model_id=model_dir, local_files_only=True)
         _MODEL = (model, tokenizer, torch, detector.analyze_text)

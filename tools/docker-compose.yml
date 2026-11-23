@@ -19,7 +19,7 @@ services:
       dockerfile: semgrep.Dockerfile
 
   aicode:
-    image: integritylens/aicode:0.1.0
+    image: integritylens/aicode:0.1.1
     build:
       context: ./aicode
       dockerfile: aicode.Dockerfile

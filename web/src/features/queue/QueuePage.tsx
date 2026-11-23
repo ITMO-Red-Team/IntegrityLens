@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useBatch, useLabels, usePairs, useSubmissions } from "../../api/hooks";
-import type { Method, PairSummary } from "../../api/types";
+import type { ComparisonMethod, PairSummary } from "../../api/types";
 import { ErrorBox, Kpi, Loading, PageHeader, RiskMeter, RiskPill } from "../../components/ui";
+import { batchProgress } from "../../lib/batch";
 import { DEFAULT_K, DEFAULT_METHOD, DEFAULT_THRESHOLD, METHODS } from "../../lib/constants";
 import { pct } from "../../lib/format";
 import { pairLabel } from "../../lib/labels";
@@ -18,10 +19,10 @@ const decisionCls = { confirmed: "text-high", acceptable: "text-low", false_posi
 export function useQueueParams() {
   const [params, setParams] = useSearchParams();
   const m = params.get("method");
-  const method: Method = METHODS.some((x) => x.value === m) ? (m as Method) : DEFAULT_METHOD;
+  const method: ComparisonMethod = METHODS.some((x) => x.value === m) ? (m as ComparisonMethod) : DEFAULT_METHOD;
   const threshold = clampInt(params.get("threshold"), DEFAULT_THRESHOLD, 0, 100);
   const k = clampInt(params.get("k"), DEFAULT_K, 1, 2000);
-  const update = (next: { method?: Method; threshold?: number; k?: number }) => {
+  const update = (next: { method?: ComparisonMethod; threshold?: number; k?: number }) => {
     const p = new URLSearchParams(params);
     Object.entries(next).forEach(([key, v]) => v !== undefined && p.set(key, String(v)));
     setParams(p, { replace: true });
@@ -29,7 +30,7 @@ export function useQueueParams() {
   return { method, threshold, k, update, search: params.toString() };
 }
 
-function ScoreCell({ pair, method, active, threshold }: { pair: PairSummary; method: Method; active: boolean; threshold: number }) {
+function ScoreCell({ pair, method, active, threshold }: { pair: PairSummary; method: ComparisonMethod; active: boolean; threshold: number }) {
   const v = scorePct(pair, method);
   if (v === null) return <span className="text-muted" title={pair.scores[method]?.reason?.message ?? "нет оценки"}>—</span>;
   return active ? <RiskMeter risk={v} threshold={threshold} /> : <span className="tabular-nums">{v}%</span>;
@@ -43,16 +44,18 @@ export function QueuePage() {
   useEffect(() => setDraft(threshold), [threshold]);
 
   const batch = useBatch(batchId);
-  const done = batch.data?.status === "done";
-  const pairsQ = usePairs(batchId, done);
+  const { ready, comparing, aiPending } = batchProgress(batch.data);
+  const pairsQ = usePairs(batchId, ready, comparing);
   const subs = useSubmissions(batchId);
   const label = useLabels(batchId);
 
   if (batch.isLoading) return <Loading what="Загружаю пакет" />;
   if (batch.error) return <ErrorBox error={batch.error} retry={batch.refetch} />;
-  if (batch.data?.status === "failed")
-    return <div role="alert" className="panel p-6 text-high">Анализ пакета не удался: очередь построить не из чего.</div>;
-  if (!done) return <Loading what="Пакет ещё обрабатывается" />;
+  if (!ready) {
+    if (batch.data && !comparing)
+      return <div role="alert" className="panel p-6 text-high">Сравнение не удалось: очередь построить не из чего.</div>;
+    return <Loading what="Пакет ещё обрабатывается" />;
+  }
   if (pairsQ.isLoading) return <Loading what="Загружаю пары" />;
   if (pairsQ.error || !pairsQ.data) return <ErrorBox error={pairsQ.error} retry={pairsQ.refetch} />;
 
@@ -73,6 +76,12 @@ export function QueuePage() {
         </div>
       </PageHeader>
 
+      {aiPending && (
+        <p role="status" className="text-[13px] text-muted">
+          AI-анализ ещё идёт — на очередь сравнения это не влияет.
+        </p>
+      )}
+
       <section className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-4" aria-label="Сводка">
         <Kpi label="Пар в пакете" value={pairs.length} hint={`${batch.data?.submissionCount ?? 0} работ`} />
         <Kpi label="К проверке" value={m.queued} hint={`порог ${threshold}%, K = ${k}`} />
@@ -84,7 +93,7 @@ export function QueuePage() {
         <div className="flex flex-wrap items-end gap-5 px-4 py-3.5">
           <label htmlFor="method" className="flex flex-col gap-1 text-xs font-medium text-muted">
             Сортировать по методу
-            <select id="method" className="field" value={method} onChange={(e) => update({ method: e.target.value as Method })}>
+            <select id="method" className="field" value={method} onChange={(e) => update({ method: e.target.value as ComparisonMethod })}>
               {METHODS.map((x) => (
                 <option key={x.value} value={x.value}>
                   {x.label}

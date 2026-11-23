@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useBatch, useLabels, useSubmissions } from "../../api/hooks";
 import type { Run } from "../../api/types";
 import { ErrorBox, Loading, OriginalName, PageHeader } from "../../components/ui";
+import { batchProgress } from "../../lib/batch";
 import { methodLabel } from "../../lib/constants";
 
 const RUN_STATUS: Record<Run["status"], { label: string; dot: string }> = {
@@ -14,7 +15,8 @@ const RUN_STATUS: Record<Run["status"], { label: string; dot: string }> = {
 function duration(r: Run) {
   if (!r.startedAt || !r.finishedAt) return "—";
   const s = (new Date(r.finishedAt).getTime() - new Date(r.startedAt).getTime()) / 1000;
-  return `${s.toFixed(1)} с`;
+  const total = Math.round(s);
+  return total < 60 ? `${s.toFixed(1)} с` : `${Math.floor(total / 60)} мин ${total % 60} с`;
 }
 
 export function BatchPage() {
@@ -26,23 +28,30 @@ export function BatchPage() {
   if (batch.isLoading) return <Loading what="Загружаю пакет" />;
   if (batch.error || !batch.data) return <ErrorBox error={batch.error} retry={batch.refetch} />;
   const b = batch.data;
-  const done = b.status === "done";
+  const { ready, comparing, aiPending } = batchProgress(b);
+  const title = ready
+    ? aiPending || comparing
+      ? "Сравнение готово"
+      : "Анализ завершён"
+    : comparing
+      ? "Анализ идёт"
+      : "Сравнение не удалось";
 
   return (
     <>
       <PageHeader step="Пакет" title={b.title}>
         <Link
           to={`/batches/${b.id}/queue`}
-          className={`btn btn-primary ${done ? "" : "pointer-events-none opacity-50"}`}
-          aria-disabled={!done}
+          className={`btn btn-primary ${ready ? "" : "pointer-events-none opacity-50"}`}
+          aria-disabled={!ready}
         >
           Открыть очередь проверки →
         </Link>
       </PageHeader>
 
-      {b.status === "failed" && (
+      {!ready && !comparing && (
         <div role="alert" className="panel border-high p-4 text-high">
-          Анализ не удался: все методы завершились с ошибкой.
+          Сравнение не удалось: методы сравнения завершились с ошибкой.
         </div>
       )}
 
@@ -77,14 +86,14 @@ export function BatchPage() {
         </div>
 
         <div className="panel flex flex-col gap-3 p-4" aria-live="polite">
-          <h2 className="text-lg">Анализ {done ? "завершён" : b.status === "failed" ? "не удался" : "идёт"}</h2>
+          <h2 className="text-lg">{title}</h2>
           <ul className="flex flex-col gap-2">
             {b.runs.map((r) => (
               <li key={r.method} className="grid grid-cols-[14px_1fr_auto] items-center gap-2.5 text-[13px]">
                 <span className={`h-2.5 w-2.5 rounded-full ${RUN_STATUS[r.status].dot}`} aria-hidden="true" />
                 <span>
                   <b>{methodLabel(r.method)}</b> — {RUN_STATUS[r.status].label}
-                  {r.status === "done" && r.failed ? `, не разобрано работ: ${r.failed}` : ""}
+                  {r.status === "done" && r.failed ? (r.method === "ai" ? `, без оценки работ: ${r.failed}` : `, не разобрано работ: ${r.failed}`) : ""}
                   {r.error ? `: ${r.error}` : ""}
                 </span>
                 <span className="tabular-nums text-muted">{duration(r)}</span>

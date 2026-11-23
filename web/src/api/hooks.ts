@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { POLL_MS } from "../lib/constants";
 import { makeLabels } from "../lib/labels";
 import { api } from "./client";
-import type { BatchStatus, FeedbackRequest, NewBatchInput } from "./types";
+import type { Batch, BatchStatus, FeedbackRequest, NewBatchInput } from "./types";
 
 export const qk = {
   batches: ["batches"] as const,
@@ -20,12 +20,15 @@ export function useBatches() {
   return useQuery({ queryKey: qk.batches, queryFn: api.listBatches });
 }
 
-export function useBatch(id: string | undefined) {
+export function useBatch(
+  id: string | undefined,
+  pollWhile: (batch: Batch) => boolean = (b) => !isFinished(b.status),
+) {
   return useQuery({
     queryKey: qk.batch(id ?? ""),
     queryFn: () => api.getBatch(id!),
     enabled: !!id,
-    refetchInterval: (q) => (q.state.data && !isFinished(q.state.data.status) ? POLL_MS : false),
+    refetchInterval: (q) => (q.state.data && pollWhile(q.state.data) ? POLL_MS : false),
   });
 }
 
@@ -42,16 +45,22 @@ export function useLabels(batchId: string | undefined) {
   return useMemo(() => makeLabels(data?.submissions ?? []), [data]);
 }
 
-export function usePairs(batchId: string | undefined, enabled = true) {
+// Второй метод сравнения может завершиться после открытия страницы: оценки обновляются, пока он идёт.
+export function usePairs(batchId: string | undefined, enabled = true, refresh = false) {
   return useQuery({
     queryKey: qk.pairs(batchId ?? ""),
     queryFn: () => api.listPairs(batchId!),
     enabled: !!batchId && enabled,
+    refetchInterval: refresh ? POLL_MS : false,
   });
 }
 
-export function usePair(pairId: string) {
-  return useQuery({ queryKey: qk.pair(pairId), queryFn: () => api.getPair(pairId) });
+export function usePair(pairId: string, refresh = false) {
+  return useQuery({
+    queryKey: qk.pair(pairId),
+    queryFn: () => api.getPair(pairId),
+    refetchInterval: refresh ? POLL_MS : false,
+  });
 }
 
 export function useSource(submissionId: string | undefined) {

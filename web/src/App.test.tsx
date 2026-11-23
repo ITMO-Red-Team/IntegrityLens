@@ -1,10 +1,10 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { strToU8, zipSync } from "fflate";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { DEMO_CORPUS } from "./mocks/corpus";
-import { DEMO_BATCH_ID, demoItems, demoSubmissionId, listSubmissions } from "./mocks/db";
+import { DEMO_BATCH_ID, createBatch, demoItems, demoSubmissionId, listSubmissions } from "./mocks/db";
 
 const queueUrl = `/batches/${DEMO_BATCH_ID}/queue?method=jplag&threshold=45&k=5`;
 
@@ -229,5 +229,65 @@ describe("сценарий проверяющего end-to-end (на моках 
     const after = document.documentElement.getAttribute("data-theme");
     expect(["light", "dark"]).toContain(after);
     expect(after).not.toBe(before);
+  });
+});
+
+const queueButton = () => screen.getByRole("link", { name: /Открыть очередь проверки/ });
+const structsimCells = () =>
+  within(screen.getByRole("table"))
+    .getAllByRole("row")
+    .slice(1)
+    .map((row) => within(row).getAllByRole("cell")[3]!.textContent);
+
+describe("AI не задерживает результаты", () => {
+  it("очередь открывается, пока AI ещё идёт", async () => {
+    const user = userEvent.setup();
+    // Сравнение готово сразу, AI — через 10 минут.
+    const b = createBatch("ai-pending", demoItems(), 0, undefined, "java", 600_000);
+    render(<App initialEntries={[`/batches/${b.id}`]} />);
+    expect(await screen.findByText("Сравнение готово")).toBeInTheDocument();
+    expect(screen.getByText("AI-детектор").parentElement).toHaveTextContent("AI-детектор — выполняется");
+    expect(queueButton()).toHaveAttribute("aria-disabled", "false");
+
+    await user.click(queueButton());
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(within(screen.getByRole("table")).getAllByRole("row").slice(1)).toHaveLength(28);
+    expect(screen.getByText("AI-анализ ещё идёт — на очередь сравнения это не влияет.")).toBeInTheDocument();
+  });
+
+  it("пока ни один метод сравнения не дал результат, результаты закрыты", async () => {
+    const b = createBatch("running", demoItems(), 60_000);
+    render(<App initialEntries={[`/batches/${b.id}`]} />);
+    expect(await screen.findByText("Анализ идёт")).toBeInTheDocument();
+    expect(queueButton()).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("очередь ждёт первый результат сравнения, даже когда AI уже готов", async () => {
+    const b = createBatch("running", demoItems(), 60_000, undefined, "java", 0);
+    render(<App initialEntries={[`/batches/${b.id}/queue`]} />);
+    expect(await screen.findByText(/Пакет ещё обрабатывается/)).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("оценка второго метода появляется, когда он завершается после открытия очереди", async () => {
+    // Часы мока под контролем: JPlag готов через 0.6 с, Structsim — через 1 с.
+    // Состояние обновляется опросом раз в секунду — по настоящим часам.
+    const poll = { timeout: 5000 };
+    let now = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const b = createBatch("late-structsim", demoItems(), 1000);
+      render(<App initialEntries={[`/batches/${b.id}/queue?method=jplag&threshold=45&k=5`]} />);
+      expect(await screen.findByText(/Пакет ещё обрабатывается/)).toBeInTheDocument();
+
+      now += 700;
+      await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument(), poll);
+      expect(structsimCells().every((text) => text === "—")).toBe(true);
+
+      now += 400;
+      await waitFor(() => expect(structsimCells().every((text) => /\d+%/.test(text ?? ""))).toBe(true), poll);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });

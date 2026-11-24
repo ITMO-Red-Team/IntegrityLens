@@ -11,6 +11,7 @@ WORKDIR /build
 COPY api/pom.xml api/pom.xml
 COPY api/src api/src
 COPY infra/db/migrations infra/db/migrations
+COPY docs/openapi.yaml docs/openapi.yaml
 ARG JAVA_BUILD_OPTS=""
 RUN MAVEN_OPTS="$JAVA_BUILD_OPTS" mvn -f api/pom.xml package -DskipTests -q
 

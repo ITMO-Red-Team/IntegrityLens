@@ -144,3 +144,13 @@ def test_lost_pairs_are_an_error(tmp_path: Path) -> None:
     programs = [Program(labels=("ID",)), Program(labels=("ID",))]
     with pytest.raises(native.NativeError, match="0 пар вместо 1"):
         native.score_all(programs, binary=str(script))
+
+
+def test_scoped_comparison_keeps_only_pairs_with_a_target() -> None:
+    rng = random.Random(19)
+    pool: list[list[str]] = []
+    programs = [_random_program(rng, pool) for _ in range(6)]
+    targets = [False, True, False, False, True, False]
+    full = native.score_all(programs, min_tile=2)
+    scoped = native.score_all(programs, min_tile=2, targets=targets)
+    assert scoped == [pair for pair in full if targets[pair.a] or targets[pair.b]]

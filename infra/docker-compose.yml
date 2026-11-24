@@ -1,17 +1,18 @@
-name: integritylens
+name: integritylens-v2
+
+x-worker-env: &worker-env
+  PGHOST: postgres
+  PGDATABASE: integritylens
+  PGUSER: ${POSTGRES_USER:-integritylens}
+  PGPASSWORD: ${POSTGRES_PASSWORD:-integritylens-local}
+  S3_ENDPOINT: http://minio:9000
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-integritylens}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-integritylens-local}
+  S3_BUCKET: integritylens
+  MOCK_DELAY_SECONDS: ${MOCK_DELAY_SECONDS:-0}
 
 x-worker: &worker
-  # Воркер запускает core, у того свои дети; убитых потомков кто-то должен забирать.
   init: true
-  environment: &worker-env
-    DATABASE_URL: postgresql://${POSTGRES_USER:-integritylens}:${POSTGRES_PASSWORD:-integritylens-local}@postgres:5432/integritylens
-    S3_ENDPOINT: http://minio:9000
-    S3_ACCESS_KEY: ${S3_ACCESS_KEY:-integritylens}
-    S3_SECRET_KEY: ${S3_SECRET_KEY:-integritylens-local}
-    S3_BUCKET: integritylens
-    CORE_ENGINE: ${CORE_ENGINE:-real}
-    MOCK_DELAY_SECONDS: ${MOCK_DELAY_SECONDS:-2}
-    MOCK_SCENARIO: ${MOCK_SCENARIO:-success}
   depends_on:
     api:
       condition: service_healthy
@@ -42,7 +43,7 @@ services:
       - minio-data:/data
 
   minio-init:
-    image: integritylens-worker-base:0.2.0
+    image: integritylens-worker-base:0.3.0
     build:
       context: ..
       dockerfile: worker/Dockerfile
@@ -71,8 +72,12 @@ services:
       S3_ENDPOINT: http://minio:9000
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-integritylens}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-integritylens-local}
+      INTEGRITYLENS_PUBLIC_BASE_URL: ${INTEGRITYLENS_PUBLIC_BASE_URL:-http://localhost:3000}
+      MAINTENANCE_INTERVAL: ${MAINTENANCE_INTERVAL:-PT1M}
+      STRUCTSIM_METHOD_VERSION: ${STRUCTSIM_METHOD_VERSION:-structsim-0.1.0+semgrep-1.180.0+core2+templates-f1a1796c}
+      AI_METHOD_VERSION: ${AI_METHOD_VERSION:-aicode-0.1.1+gigacheck-9fabe1503f+int2}
     ports:
-      - '${API_BIND:-0.0.0.0}:${API_PORT:-8080}:8080'
+      - '${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080'
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,41 +91,36 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # Текущий API создаёт оба метода. Удалять JPlag нужно вместе с переходом API
-  # и проверок CI на новый контракт Structsim + AI.
-  worker-jplag:
-    <<: *worker
-    image: integritylens-worker-jplag:0.2.0
-    build:
-      context: ..
-      dockerfile: worker/Dockerfile
-      target: jplag
-    environment:
-      <<: *worker-env
-      WORKER_METHOD: jplag
-
   worker-structsim:
     <<: *worker
-    image: integritylens-worker-structsim:0.2.0
     build:
       context: ..
       dockerfile: worker/Dockerfile
-      target: structsim
+      target: ${STRUCTSIM_BUILD_TARGET:-structsim}
     environment:
       <<: *worker-env
       WORKER_METHOD: structsim
+      WORKER_METHOD_VERSION: ${STRUCTSIM_METHOD_VERSION:-structsim-0.1.0+semgrep-1.180.0+core2+templates-f1a1796c}
+      CORE_ENGINE: ${STRUCTSIM_ENGINE:-real}
+      MOCK_SCENARIO: ${STRUCTSIM_MOCK_SCENARIO:-success}
 
-  web:
-    build: 
-      context: ../web
+  worker-ai:
+    <<: *worker
+    build:
+      context: ..
+      dockerfile: worker/ai.Dockerfile
+      target: ${AI_BUILD_TARGET:-ai-worker}
       args:
-        VITE_USE_MOCKS: "false"
-    ports:
-      - '${WEB_PORT:-3000}:80'
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
+        AICODE_MODEL_URL: ${AICODE_MODEL_URL:-https://github.com/ITMO-Red-Team/IntegrityLens/releases/download/aicode-model-v0.1.0/gigacheck-int2.zip}
+        AICODE_MODEL_SHA256: ${AICODE_MODEL_SHA256:-afd7277e650d08055c6deca54375dabc8423cdc289405b9c08343058a750c28c}
+    environment:
+      <<: *worker-env
+      WORKER_METHOD: ai
+      WORKER_METHOD_VERSION: ${AI_METHOD_VERSION:-aicode-0.1.1+gigacheck-9fabe1503f+int2}
+      CORE_ENGINE: ${AI_ENGINE:-real}
+      MOCK_SCENARIO: ${AI_MOCK_SCENARIO:-success}
+      CORE_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-600}
+      AICODE_THREADS: ${AICODE_THREADS:-4}
 
 volumes:
   postgres-data:

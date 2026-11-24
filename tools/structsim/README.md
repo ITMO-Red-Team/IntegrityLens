@@ -77,7 +77,7 @@ uv run structsim <директория> --tiles a_py.py c_translated.go
 
 | | Шаг | Что делает | Где |
 |---|---|---|---|
-| 1 | общее дерево | `semgrep-core` разбирает файл в дерево, одинаковое для разных языков | [`semgrep.py`](src/structsim/semgrep.py) |
+| 1 | общее дерево | `semgrep-core` разбирает файл в дерево, одинаковое для разных языков; Java разбирает tree-sitter в процессе | [`semgrep.py`](src/structsim/semgrep.py), [`treesitter.py`](src/structsim/treesitter.py) |
 | 2 | очистка | дерево → последовательность меток, без имён, типов и значений | [`labels.py`](src/structsim/labels.py) |
 | 3 | сравнение пары | четыре меры, `COMBINED` и итог пары | [`compare.py`](src/structsim/compare.py) |
 | 4 | сравнение с фоном | `contrast-z` по набору решений одной задачи | [`contrast.py`](src/structsim/contrast.py) |
@@ -97,7 +97,7 @@ uv run structsim <директория> --tiles a_py.py c_translated.go
 | | |
 |---|---|
 | [docs/pipeline.md](docs/pipeline.md) | конвейер: границы, типы, три меры, тайлы, что осталось |
-| [docs/step1.md](docs/step1.md) | шаг 1: `semgrep-core` и позиции токенов, языки, запуск образа, что может пойти не так |
+| [docs/step1.md](docs/step1.md) | шаг 1: `semgrep-core` и позиции токенов, языки, Java без Semgrep, запуск образа, что может пойти не так |
 | [docs/step2.md](docs/step2.md) | шаг 2: таблица «узел → метки», почему порядок инфиксный, блоки, позиции |
 | [docs/native.md](docs/native.md) | шаг 3 и тайлы на Rust: почему числа те же, откуда скорость, асимптотика, формат |
 
@@ -118,7 +118,7 @@ Python.
 ```
 tools/structsim/
   README.md
-  pyproject.toml            — uv-проект, ядро без зависимостей
+  pyproject.toml            — uv-проект, ядро без обязательных зависимостей
   docker/
     semgrep.Dockerfile      — образ для шага 1
   docs/                     — конвейер и шаг 1
@@ -126,6 +126,7 @@ tools/structsim/
   src/structsim/
     semgrep.py              — шаг 1: файл → дерево
     labels.py               — шаг 2: дерево → метки и блоки
+    treesitter.py           — шаги 1 и 2 для Java через tree-sitter
     compare.py              — шаг 3: четыре меры, COMBINED и итог
     contrast.py             — шаг 4: contrast-z
     tiles.py                — общие куски (GST)

@@ -1,6 +1,6 @@
 [project]
 name = "structsim"
-version = "0.2.0"
+version = "0.3.0"
 description = "Структурное сходство программ: сравнение устройства кода, в том числе на разных языках"
 requires-python = ">=3.12"
 # Ядро метода намеренно без зависимостей: шаги 2–4 — это обход дерева и
@@ -8,11 +8,14 @@ requires-python = ">=3.12"
 # Semgrep, и он запускается в контейнере, а не импортируется.
 dependencies = []
 
+[project.optional-dependencies]
+java = ["tree-sitter==0.27.0", "tree-sitter-java==0.23.5"]
+
 [project.scripts]
 structsim = "structsim.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.3"]
+dev = ["pytest>=8.3", "tree-sitter==0.27.0", "tree-sitter-java==0.23.5"]
 
 [build-system]
 requires = ["hatchling"]

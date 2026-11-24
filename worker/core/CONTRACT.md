@@ -28,7 +28,7 @@
 
 | | `jplag` | `structsim` |
 | --- | --- | --- |
-| `methodVersion` | `jplag-6.3.0+templates-{набор}` | `structsim-0.2.0+semgrep-1.180.0+templates-{набор}` |
+| `methodVersion` | `jplag-6.3.0+templates-{набор}` | `structsim-0.3.0+semgrep-1.180.0+templates-{набор}` |
 | `value` | `max` или `avg` у JPlag, см. `metric` | большее из `COMBINED` и `containment` |
 | `details` | `avg`, `max`, `longestMatch` | `order`, `shingle`, `blocks`, `combined`, `containment`, `contrastZ` |
 | `fragments` | совпавшие куски JPlag | тайлы |

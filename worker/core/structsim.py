@@ -1,7 +1,8 @@
 """structsim: шаги 1–4 из tools/structsim.
 
-Шаг 1 — `semgrep-core` напрямую, без контейнера на файл: воркер уже в контейнере, и
-бинарник лежит в его образе. Шаг 2 — Python-код инструмента, он занимает миллисекунды.
+Шаг 1 для Java — tree-sitter в процессе воркера, для остальных языков и для Java с синтаксической
+ошибкой — `semgrep-core` напрямую, без контейнера на файл: воркер уже в контейнере, и бинарник лежит
+в его образе. Шаг 2 — Python-код инструмента, он занимает миллисекунды.
 Шаг 3 и тайлы — `native`, если он есть: числа те же, а времени в сотни раз меньше.
 """
 import hashlib
@@ -12,14 +13,14 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from itertools import combinations
 
-from structsim import compare, contrast, native, tiles
+from structsim import compare, contrast, native, tiles, treesitter
 from structsim.labels import to_program
 from structsim.semgrep import _ANSI, SEMGREP_VERSION, language_of
 
 from .engine import available_cpus, merged_params, positive_int, sources_of
 from .result import assemble
 
-STRUCTSIM_VERSION = "0.2.0"
+STRUCTSIM_VERSION = "0.3.0"
 METHOD_VERSION = f"structsim-{STRUCTSIM_VERSION}+semgrep-{SEMGREP_VERSION}"
 DEFAULT_PARAMS = {"minTile": tiles.MIN_TILE_LENGTH}
 FILE_TIMEOUT_SECONDS = 120
@@ -58,7 +59,9 @@ def _semgrep_tree(path):
 def _parse(path):
     """Шаги 1 и 2 одного файла: `(программа, причина)`, одно из двух — None."""
     try:
-        program = to_program(_semgrep_tree(path), language=language_of(path), source=path.name)
+        program = treesitter.java_program(path) if language_of(path) == "java" else None
+        if program is None:
+            program = to_program(_semgrep_tree(path), language=language_of(path), source=path.name)
     except _NotParsed as error:
         return None, str(error)
     except RecursionError:

@@ -17,6 +17,7 @@ from itertools import combinations
 from pathlib import Path
 
 from structsim import compare, contrast, semgrep, tiles
+from structsim import treesitter
 from structsim.labels import to_program
 from structsim.model import Program
 
@@ -132,14 +133,18 @@ def to_programs(
     skipped: dict[str, str] = {}
     for path in files:
         path = Path(path)
-        try:
-            tree = semgrep.dump_ast(path, image=image)
-        except semgrep.SemgrepError as exc:
-            skipped[path.name] = str(exc)
-            continue
-        program = to_program(
-            tree, language=semgrep.language_of(path), source=path.name
-        )
+        program = None
+        if semgrep.language_of(path) == "java":
+            program = treesitter.java_program(path)
+        if program is None:
+            try:
+                tree = semgrep.dump_ast(path, image=image)
+            except semgrep.SemgrepError as exc:
+                skipped[path.name] = str(exc)
+                continue
+            program = to_program(
+                tree, language=semgrep.language_of(path), source=path.name
+            )
         if not program.labels:
             skipped[path.name] = "разобрался, но меток не дал"
             continue

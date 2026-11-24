@@ -303,11 +303,18 @@ class StructsimTest(MethodCase):
                 self.execute()
 
     def test_broken_tool_is_retryable(self):
-        self.add("base", "renamed", "other", "partial", "tiny")
+        self.add("base", "renamed", "other", "partial", "tiny", "broken")
         self.assertEqual(self.cli_exit_code(SEMGREP_CORE="/nonexistent"), 1)
 
-    def test_killed_tool_is_retryable_not_a_parse_failure(self):
+    def test_valid_java_does_not_need_semgrep(self):
         self.add("base", "renamed", "other", "partial", "tiny")
+        expected = self.execute()
+        self.assertEqual(self.cli_exit_code(SEMGREP_CORE="/nonexistent"), 0)
+        result = json.loads((self.root / "cli" / "result.json").read_text(encoding="utf-8"))
+        self.assertEqual(result["pairs"], expected["pairs"])
+
+    def test_killed_tool_is_retryable_not_a_parse_failure(self):
+        self.add("base", "renamed", "other", "partial", "tiny", "broken")
         killed = self.root / "killed"
         killed.write_text("#!/bin/sh\nkill -9 $$\n")
         killed.chmod(0o755)

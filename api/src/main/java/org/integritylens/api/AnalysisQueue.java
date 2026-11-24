@@ -50,6 +50,25 @@ class AnalysisQueue {
                 """, aiVersion, aiVersion);
     }
 
+    List<UUID> outdatedSimilarityTeachers() {
+        return jdbc.queryForList("""
+                select distinct a.teacher_id from assignments a
+                join analysis_runs r on r.assignment_id = a.id and r.revision = a.similarity_revision
+                where a.deleted_at is null and r.method = 'structsim' and r.method_version <> ?
+                """, UUID.class, structsimVersion);
+    }
+
+    // Caller holds the teacher lock: recheck after locking to avoid duplicate revisions.
+    void refreshSimilarityVersion(UUID teacher) {
+        jdbc.queryForList("""
+                select a.id from assignments a
+                join analysis_runs r on r.assignment_id = a.id and r.revision = a.similarity_revision
+                where a.teacher_id = ? and a.deleted_at is null
+                    and r.method = 'structsim' and r.method_version <> ?
+                order by a.id
+                """, UUID.class, teacher, structsimVersion).forEach(this::advance);
+    }
+
     List<UUID> dependents(UUID source) {
         return jdbc.queryForList("""
                 select assignment_id from assignment_sources where source_assignment_id = ? order by assignment_id

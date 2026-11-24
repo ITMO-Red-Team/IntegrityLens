@@ -55,6 +55,16 @@ class Maintenance {
             }
         }
         queue.enqueueMissingAi();
+        for (UUID teacher : queue.outdatedSimilarityTeachers()) {
+            try {
+                transactions.executeWithoutResult(status -> {
+                    assignments.lockTeacher(teacher);
+                    queue.refreshSimilarityVersion(teacher);
+                });
+            } catch (RuntimeException ex) {
+                LOG.warn("Could not refresh similarity version: {}", ex.getClass().getSimpleName());
+            }
+        }
     }
 
     private void expire(Expired row) {

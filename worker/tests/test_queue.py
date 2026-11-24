@@ -9,7 +9,6 @@ class QueueTest(unittest.TestCase):
     def setUp(self):
         self.worker = Worker()
         self.other = Worker()
-        self.worker.version = self.other.version = f"queue-test-{uuid4()}"
         self.teacher = uuid4()
         self.assignment = uuid4()
         with self.worker.connect() as db:

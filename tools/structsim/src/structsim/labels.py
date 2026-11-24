@@ -44,7 +44,7 @@ SKIPPED = frozenset({"ptype", "frettype", "fkind", "DirectiveStmt", "ImportAs",
 # Знаки операторов — «общий для всех языков знак». Имена слева приходят от
 # Semgrep, он их уже привёл к одному виду независимо от языка.
 OPERATORS: dict[str, str] = {
-    "Plus": "+", "Minus": "-", "Mult": "*", "Div": "/", "Mod": "%",
+    "Plus": "+", "Minus": "-", "Mult": "*", "Div": "/", "FloorDiv": "/", "Mod": "%",
     "Pow": "**", "Eq": "==", "NotEq": "!=", "PhysEq": "==", "NotPhysEq": "!=",
     "Lt": "<", "LtE": "<=", "Gt": ">", "GtE": ">=",
     "And": "AND", "Or": "OR", "Not": "NOT", "Xor": "XOR",
@@ -312,7 +312,9 @@ class _Walker:
         return
 
     def _n_ForClassic(self, value: Any, node: Any) -> None:
-        return
+        parts = value if isinstance(value, list) else []
+        if len(parts) == 3 and not parts[0] and parts[2] is None and parts[1] is not None:
+            self.walk(parts[1])
 
     # переходы ------------------------------------------------------------
 

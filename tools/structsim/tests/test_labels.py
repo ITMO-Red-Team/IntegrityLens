@@ -221,3 +221,18 @@ def test_parameters_are_counted_not_listed():
     assert cpp.labels[0:2] == ("FUNC", "P4")
     # Четыре параметра не дали четырёх ID: сразу после P4 идёт тело.
     assert cpp.labels[2] == "IF"
+
+
+def test_while_style_for_keeps_its_condition():
+    joined = " ".join(program("loops.go", "go").labels)
+    assert "LOOP ID & ID != N0 ; ID = ID ^ ID END" in joined
+    assert "LOOP ; ID += ID END" in joined
+    assert "LOOP BRK END" in joined
+
+
+def test_floor_division_is_division():
+    labels = program("floordiv.py", "python").labels
+    joined = " ".join(labels)
+    assert "; ID = ID / ID" in joined
+    assert "; ID /= ID" in joined
+    assert "FloorDiv" not in labels

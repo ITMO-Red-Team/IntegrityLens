@@ -26,6 +26,8 @@ docker run --rm --mount "type=bind,source=$PWD/tools/structsim/tests/data,target
 | Файл | Зачем |
 |---|---|
 | `check.py` + `.json` | `None`/`True`, вызов с двумя аргументами, унарный минус, словарь и множество — то, чего не было в двух предыдущих |
+| `loops.go` + `.json` | три вида `for` в Go: цикл-while с условием, обычный `for` с заголовком и бесконечный `for { }` |
+| `floordiv.py` + `.json` | целочисленное деление `//` и `//=` |
 
 ## langs/
 

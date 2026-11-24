@@ -28,9 +28,9 @@
 
 | | `jplag` | `structsim` |
 | --- | --- | --- |
-| `methodVersion` | `jplag-6.3.0+templates-{набор}` | `structsim-0.1.0+semgrep-1.180.0+templates-{набор}` |
-| `value` | `max` или `avg` у JPlag, см. `metric` | `COMBINED` |
-| `details` | `avg`, `max`, `longestMatch` | `order`, `shingle`, `blocks`, `contrastZ` |
+| `methodVersion` | `jplag-6.3.0+templates-{набор}` | `structsim-0.2.0+semgrep-1.180.0+templates-{набор}` |
+| `value` | `max` или `avg` у JPlag, см. `metric` | большее из `COMBINED` и `containment` |
+| `details` | `avg`, `max`, `longestMatch` | `order`, `shingle`, `blocks`, `combined`, `containment`, `contrastZ` |
 | `fragments` | совпавшие куски JPlag | тайлы |
 | `stats` работы | `tokens`, `templateLines` | `labels`, `blocks`, `templateLines` |
 | параметры | `minTokens` (9), `metric` (`max`), `ignoreTemplates` (`true`) | `minTile` (10), `ignoreTemplates` (`true`) |
@@ -38,7 +38,7 @@
 
 `max` по умолчанию: на коде с заготовками он лучше `avg` (AUC на ConPlag 0.909 против 0.865),
 без заготовок равен ([research/one](../../research/one/README.md)).
-`contrastZ` есть только если разобрано не меньше пяти работ.
+`contrastZ` есть только если разобрано не меньше пяти работ, и считается он по `COMBINED`.
 
 Выход дополняют артефакты: `artifacts/report.jplag` открывается просмотрщиком JPlag,
 `artifacts/timings.json` — время этапов. Исходники в отчёте — те, что видел JPlag: шаблонные

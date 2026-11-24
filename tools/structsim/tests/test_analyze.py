@@ -83,16 +83,15 @@ def report_of(programs, skipped=None):
     )
 
 
-def test_top_sorts_by_combined():
+def test_top_sorts_by_final():
     programs = {
         "relax.cpp": program("relax.cpp"),
         "relax.py": program("relax.py"),
         "rich.py": program("rich.py"),
     }
     top = report_of(programs).top(3)
-    assert [s.combined for s in top] == sorted(
-        (s.combined for s in top), reverse=True
-    )
+    assert [s.final for s in top] == sorted((s.final for s in top), reverse=True)
+    assert all(s.final == max(s.combined, s.containment) for s in top)
 
 
 def test_report_counts_skipped_files():

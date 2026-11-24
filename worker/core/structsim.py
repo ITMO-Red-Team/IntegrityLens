@@ -19,7 +19,7 @@ from structsim.semgrep import _ANSI, SEMGREP_VERSION, language_of
 from .engine import available_cpus, merged_params, positive_int, sources_of
 from .result import assemble
 
-STRUCTSIM_VERSION = "0.1.0"
+STRUCTSIM_VERSION = "0.2.0"
 METHOD_VERSION = f"structsim-{STRUCTSIM_VERSION}+semgrep-{SEMGREP_VERSION}"
 DEFAULT_PARAMS = {"minTile": tiles.MIN_TILE_LENGTH}
 FILE_TIMEOUT_SECONDS = 120
@@ -109,7 +109,8 @@ def _native_scores(programs, ids, min_tile, threads, targets):
     flags = None if targets is None else [sid in targets for sid in ids]
     pairs = native.score_all([programs[sid] for sid in ids], min_tile=min_tile, threads=threads, targets=flags)
     return {(ids[pair.a], ids[pair.b]): ({"order": pair.order, "shingle": pair.shingle, "blocks": pair.blocks,
-                                          "combined": pair.combined}, _fragments(pair.tiles))
+                                          "combined": pair.combined, "containment": pair.containment,
+                                          "final": pair.final}, _fragments(pair.tiles))
             for pair in pairs}
 
 
@@ -136,10 +137,10 @@ def compare_sources(sources, params, watch, targets=None):
         z_scores = contrast.contrast_z({pair: measures["combined"] for pair, (measures, _) in scores.items()})
     scored = {}
     for pair, (measures, fragments) in scores.items():
-        details = {"order": measures["order"], "shingle": measures["shingle"], "blocks": measures["blocks"]}
+        details = {key: measures[key] for key in ("order", "shingle", "blocks", "combined", "containment")}
         if pair in z_scores:
             details["contrastZ"] = z_scores[pair]
-        scored[pair] = {"value": measures["combined"], "details": details, "fragments": fragments}
+        scored[pair] = {"value": measures["final"], "details": details, "fragments": fragments}
     return programs, scored, failed
 
 

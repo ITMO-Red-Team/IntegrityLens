@@ -84,5 +84,6 @@ def run() -> None:
     result = pd.DataFrame(rows)
     result.to_csv(paths.TABLES_DIR / "metrics.csv", index=False, float_format="%.6f")
     (paths.TABLES_DIR / "metrics.md").write_text(to_markdown(result), encoding="utf-8")
-    head = result[result["score"].isin([config.HEAD_STRUCTSIM, config.HEAD_JPLAG])]
+    head = result[result["score"].isin([config.FINAL_STRUCTSIM, config.HEAD_STRUCTSIM, config.HEAD_JPLAG,
+                                        "jplag-default:max"])]
     print(head[["version", "score", "auc", "pr_auc", "f1_test"]].to_string(index=False))

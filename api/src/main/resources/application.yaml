@@ -23,7 +23,7 @@ integritylens:
   public-base-url: ${INTEGRITYLENS_PUBLIC_BASE_URL:http://localhost:3000}
   maintenance-interval: ${MAINTENANCE_INTERVAL:PT1M}
   analysis:
-    structsim-version: ${STRUCTSIM_METHOD_VERSION:structsim-0.1.0+semgrep-1.180.0+core2+templates-f1a1796c}
+    structsim-version: ${STRUCTSIM_METHOD_VERSION:structsim-0.2.0+semgrep-1.180.0+core2+templates-f1a1796c}
     ai-version: ${AI_METHOD_VERSION:aicode-0.1.1+gigacheck-9fabe1503f+int2}
   s3:
     endpoint: ${S3_ENDPOINT:http://localhost:9000}

@@ -230,8 +230,11 @@ class StructsimTest(MethodCase):
     def test_scores_fragments_and_reproducibility(self):
         result = self.common_checks()
         pair = self.pair(result, "base", "renamed")
-        self.assertEqual({key: pair["details"][key] for key in ("order", "shingle", "blocks")},
-                         {"order": 1.0, "shingle": 1.0, "blocks": 1.0})
+        self.assertEqual({key: pair["details"][key] for key in ("order", "shingle", "blocks", "combined", "containment")},
+                         {"order": 1.0, "shingle": 1.0, "blocks": 1.0, "combined": 1.0, "containment": 1.0})
+        for pair in result["pairs"]:
+            if pair["value"] is not None:
+                self.assertEqual(pair["value"], max(pair["details"]["combined"], pair["details"]["containment"]))
         self.assertEqual(self.status(result, "base")["stats"]["labels"], selfcheck.BASE_LABELS)
 
     def test_templates_do_not_count(self):

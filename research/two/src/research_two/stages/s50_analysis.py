@@ -169,7 +169,7 @@ def length_ratio(parts: dict[str, pd.DataFrame]) -> pd.DataFrame:
     относительно короткой программы и заготовку не замечает.
     """
     parse = pd.read_csv(paths.TABLES_DIR / "structsim_parse.csv", dtype={"submission": str})
-    cols = [S, "structsim:blocks", J, "jplag-default:max"]
+    cols = [config.FINAL_STRUCTSIM, S, "structsim:blocks", "structsim:containment", J, "jplag-default:max"]
     rows = []
     for version, part in parts.items():
         n = parse[parse["version"] == version].set_index("submission")["labels"]

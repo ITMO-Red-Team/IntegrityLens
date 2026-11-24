@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 from bisect import bisect_right
@@ -215,6 +216,86 @@ def analyze_text(
     )
 
 
+def _fp32_dequantize(weight: Any) -> Any:
+    """Dequantize a quanto weight straight to float32.
+
+    QBitsTensor replicates QBitsDequantizer.forward without the bfloat16
+    round-trip (one fewer full-size pass and half the peak memory); other
+    quanto tensors fall back to dequantize() and upcast.
+    """
+    import torch
+
+    from optimum.quanto.tensor import QTensor
+
+    if not isinstance(weight, QTensor):
+        return weight.to(torch.float32)
+    if not hasattr(weight, "_shift"):  # QBytesTensor family: no shift, no groups
+        return weight.dequantize().to(torch.float32)
+
+    from optimum.quanto.tensor.grouped import ungroup
+    from optimum.quanto.tensor.packed import PackedTensor
+
+    data = weight._data.unpack() if isinstance(weight._data, PackedTensor) else weight._data
+    shift = weight._shift
+    if not shift.dtype.is_floating_point:
+        data = data.to(torch.int8) - shift.to(torch.int8)
+    result = data.to(torch.float32).mul_(weight._scale.to(torch.float32))
+    if shift.dtype.is_floating_point:
+        result -= shift.to(torch.float32)
+    if weight.axis is None:
+        return result
+    return ungroup(result, axis=weight.axis, orig_shape=weight.shape)
+
+
+def _enable_fp32_linear() -> None:
+    """Compute quantized linears with float32 GEMM, activations keep their dtype.
+
+    On AVX2-only CPUs (no AVX512_BF16/AMX) PyTorch emulates bfloat16 matmul and
+    runs 4-5x slower than float32, while the int2 weights already spend most of
+    their time being dequantized per op. Dequantizing to float32 feeds oneDNN's
+    float32 GEMM instead; casting the result back to the module dtype keeps
+    norms, attention and the DETR head on their original bfloat16 path, so this
+    is a strictly more precise variant of the same inference.
+    """
+    import torch
+
+    from optimum.quanto.tensor import QTensor
+    from optimum.quanto.tensor.function import QuantizedLinearFunction
+    from optimum.quanto.tensor.qtensor import qfallback as _qfallback
+
+    def quantized_linear_forward(ctx, input, other, bias=None):
+        out_dtype = input.dtype
+        logits = torch.nn.functional.linear(
+            input.to(torch.float32), _fp32_dequantize(other),
+            bias.to(torch.float32) if bias is not None else None,
+        )
+        return logits.to(out_dtype)
+
+    def fp32_qfallback(op, *args, **kwargs):
+        if op is torch.matmul and any(isinstance(a, QTensor) for a in args):
+            out_dtype = next(a.dtype for a in args if torch.is_tensor(a))
+            args = [_fp32_dequantize(a) if isinstance(a, QTensor) else a for a in args]
+            return torch.matmul(*args, **kwargs).to(out_dtype)
+        return _qfallback(op, *args, **kwargs)
+
+    QuantizedLinearFunction.forward = staticmethod(quantized_linear_forward)
+    for module_name in ("optimum.quanto.tensor.qtensor", "optimum.quanto.tensor.weights.qbits",
+                        "optimum.quanto.tensor.weights.qbytes"):
+        module = importlib.import_module(module_name)
+        if hasattr(module, "qfallback"):
+            module.qfallback = fp32_qfallback
+
+
+def _resolve_compute(compute: str | None, quantization: str) -> str:
+    """Compute dtype for quantized linears: float32 by default, bfloat16 opt-out."""
+    compute = compute or os.environ.get("AICODE_COMPUTE", "float32")
+    if compute not in {"float32", "bfloat16"}:
+        raise DetectorError(f"unsupported compute mode: {compute}")
+    if quantization == "none":
+        return "bfloat16"  # no quanto tensors: the patch has nothing to speed up
+    return compute
+
+
 def _patch_attention_output_dimension() -> None:
     """Preserve value dimensions when GigaCheck's torch dispatch drops out_dim."""
     try:
@@ -248,8 +329,14 @@ def load_model(
     dtype: str = "bfloat16",
     quantization: str = "int2",
     local_files_only: bool = False,
+    compute: str | None = None,
 ) -> tuple[Any, Any, Any]:
-    """Load GigaCheck with CPU-only inference and optional Quanto weight PTQ."""
+    """Load GigaCheck with CPU-only inference and optional Quanto weight PTQ.
+
+    With quantized weights the linears run as float32 GEMM by default
+    (`compute="float32"`, env `AICODE_COMPUTE=bfloat16` to opt out): bfloat16
+    matmul is emulated on AVX2 CPUs and measured 4-5x slower than float32.
+    """
     try:
         import torch
         from transformers import AutoModel
@@ -262,11 +349,14 @@ def load_model(
         raise DetectorError(f"unsupported dtype: {dtype}")
     if quantization not in {"none", "int2", "int4"}:
         raise DetectorError(f"unsupported quantization: {quantization}")
+    compute_mode = _resolve_compute(compute, quantization)
 
     model_path = Path(model_id).expanduser()
     if model_path.is_dir() and (model_path / "quanto_qmap.json").is_file():
         model, tokenizer, torch = _load_exported_model(model_path, torch, AutoModel)
         _patch_attention_output_dimension()
+        if compute_mode == "float32":
+            _enable_fp32_linear()
         return model, tokenizer, torch
 
     model_kwargs = {
@@ -288,6 +378,8 @@ def load_model(
 
     model = AutoModel.from_pretrained(model_id, **model_kwargs)
     _patch_attention_output_dimension()
+    if compute_mode == "float32":
+        _enable_fp32_linear()
     if quantization == "none":
         model.to("cpu")
     model.eval()

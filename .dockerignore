@@ -6,4 +6,6 @@
 .env*
 research
 tools/*/tests
+tools/aicode/artifacts
+tools/aicode/.hf-cache
 *.pdf

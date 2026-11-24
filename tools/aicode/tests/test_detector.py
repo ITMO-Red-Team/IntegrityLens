@@ -136,11 +136,42 @@ def test_load_model_uses_quanto_int2_and_cpu_device_map(monkeypatch):
     fake_torch = ModuleType("torch")
     fake_torch.bfloat16 = object()
     fake_torch.float32 = object()
+    fake_torch.nn = ModuleType("torch.nn")
+    fake_torch.nn.functional = ModuleType("torch.nn.functional")
     fake_transformers = ModuleType("transformers")
     fake_transformers.AutoModel = FakeAutoModel
     fake_transformers.QuantoConfig = FakeQuantoConfig
-    monkeypatch.setitem(sys.modules, "torch", fake_torch)
-    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+    # load_model installs the float32 linear patch: quanto arrives as fakes too.
+    fake_optimum = ModuleType("optimum")
+    fake_optimum.__path__ = []
+    fake_quanto = ModuleType("optimum.quanto")
+    fake_quanto.__path__ = []
+    fake_qtensor = ModuleType("optimum.quanto.tensor")
+    fake_qtensor.__path__ = []
+    fake_qtensor.QTensor = type("QTensor", (), {})
+    fake_qtensor_sub = ModuleType("optimum.quanto.tensor.qtensor")
+    fake_qtensor_sub.qfallback = lambda *args, **kwargs: None
+    fake_qfunction = ModuleType("optimum.quanto.tensor.function")
+    fake_qfunction.QuantizedLinearFunction = type("QuantizedLinearFunction", (), {})
+    fake_qweights = ModuleType("optimum.quanto.tensor.weights")
+    fake_qweights.__path__ = []
+    fake_qbits = ModuleType("optimum.quanto.tensor.weights.qbits")
+    fake_qbytes = ModuleType("optimum.quanto.tensor.weights.qbytes")
+    for name, module in {
+        "torch": fake_torch,
+        "torch.nn": fake_torch.nn,
+        "torch.nn.functional": fake_torch.nn.functional,
+        "transformers": fake_transformers,
+        "optimum": fake_optimum,
+        "optimum.quanto": fake_quanto,
+        "optimum.quanto.tensor": fake_qtensor,
+        "optimum.quanto.tensor.qtensor": fake_qtensor_sub,
+        "optimum.quanto.tensor.function": fake_qfunction,
+        "optimum.quanto.tensor.weights": fake_qweights,
+        "optimum.quanto.tensor.weights.qbits": fake_qbits,
+        "optimum.quanto.tensor.weights.qbytes": fake_qbytes,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, module)
 
     model, tokenizer, torch = load_model()
 

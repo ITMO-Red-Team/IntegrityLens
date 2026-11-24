@@ -1,6 +1,6 @@
 [project]
 name = "integritylens-aicode"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local CPU-based AI-generated code span detection"
 requires-python = ">=3.11"
 dependencies = [

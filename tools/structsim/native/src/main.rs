@@ -18,6 +18,7 @@ use compare::{score_pair, BlockTable, PairScore, Program, Worker, MAX_ALPHABET};
 use matcher::Seq;
 
 const PROTOCOL: &str = "structsim-native/1";
+const SCOPED_PROTOCOL: &str = "structsim-native/2";
 
 struct Numbers<'a> {
     tokens: std::str::SplitAsciiWhitespace<'a>,
@@ -43,6 +44,7 @@ struct RawProgram {
 
 struct Input {
     programs: Vec<RawProgram>,
+    targets: Vec<bool>,
     alphabet: usize,
     min_tile: usize,
     threads: usize,
@@ -51,8 +53,8 @@ struct Input {
 fn parse(text: &str) -> Result<Input, String> {
     let mut tokens = text.split_ascii_whitespace();
     let header = tokens.next().ok_or("пустой вход")?;
-    if header != PROTOCOL {
-        return Err(format!("формат {header:?}, ожидался {PROTOCOL:?}"));
+    if header != PROTOCOL && header != SCOPED_PROTOCOL {
+        return Err(format!("неподдерживаемый формат {header:?}"));
     }
     let mut numbers = Numbers { tokens };
     let count = numbers.next()?;
@@ -62,6 +64,17 @@ fn parse(text: &str) -> Result<Input, String> {
     if alphabet > MAX_ALPHABET {
         return Err(format!("меток {alphabet}, поддерживается до {MAX_ALPHABET}"));
     }
+    let targets = if header == SCOPED_PROTOCOL {
+        (0..count)
+            .map(|_| match numbers.next()? {
+                0 => Ok(false),
+                1 => Ok(true),
+                _ => Err("допустимые флаги целевой работы: 0 и 1".to_string()),
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        vec![true; count]
+    };
     let mut programs = Vec::with_capacity(count);
     for _ in 0..count {
         let length = numbers.next()?;
@@ -78,7 +91,7 @@ fn parse(text: &str) -> Result<Input, String> {
         }
         programs.push(RawProgram { labels, lines, blocks });
     }
-    Ok(Input { programs, alphabet, min_tile, threads })
+    Ok(Input { programs, targets, alphabet, min_tile, threads })
 }
 
 /// Параллельный `map` с раздачей по одному: цена задач различается на порядки,
@@ -163,7 +176,7 @@ fn run() -> Result<(), String> {
     let started = Instant::now();
     let mut text = String::new();
     io::stdin().read_to_string(&mut text).map_err(|error| format!("чтение входа: {error}"))?;
-    let input = parse(&text).map_err(|error| format!("разбор входа: {error}"))?;
+    let mut input = parse(&text).map_err(|error| format!("разбор входа: {error}"))?;
     drop(text);
 
     let threads = match input.threads {
@@ -171,12 +184,14 @@ fn run() -> Result<(), String> {
         count => count,
     };
     let min_tile = input.min_tile;
+    let targets = std::mem::take(&mut input.targets);
     let parsed = started.elapsed();
     let (programs, table) = build(input, threads);
     let indexed = started.elapsed();
 
     let pairs: Vec<(usize, usize)> = (0..programs.len())
         .flat_map(|a| (a + 1..programs.len()).map(move |b| (a, b)))
+        .filter(|&(a, b)| targets[a] || targets[b])
         .collect();
     let max_len = programs
         .iter()

@@ -1,0 +1,2 @@
+worker/core/template_filter.py text eol=lf
+worker/core/templates/*.java text eol=lf

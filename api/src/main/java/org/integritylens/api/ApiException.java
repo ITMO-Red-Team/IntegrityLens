@@ -18,6 +18,10 @@ public class ApiException extends RuntimeException {
         this.details = details;
     }
 
+    static ApiException invalid(String message) {
+        return new ApiException(422, "VALIDATION_ERROR", message);
+    }
+
     static ApiException notFound() {
         return new ApiException(404, "NOT_FOUND", "Объект не найден");
     }

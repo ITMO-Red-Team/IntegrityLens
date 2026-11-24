@@ -1,43 +1,22 @@
 # IntegrityLens
 
-## Документация
+Backend для приёма Java-работ и анализа с помощью Structsim и локального AI-детектора. Исходники хранятся в MinIO, задания, очередь и результаты — в PostgreSQL.
 
-Сайт документации собирается на MkDocs. Локальный просмотр и настройка
-GitHub Pages описаны в [docs/contributing.md](docs/contributing.md).
-Конфигурация сайта — [mkdocs.yml](mkdocs.yml).
-
-Бэкенд сравнения Java-работ: API, два воркера (JPlag и structsim), PostgreSQL и MinIO.
-
-## Запуск
+## Запуск backend
 
 ```sh
-docker compose -f infra/docker-compose.yml up --build -d
-curl -F archive=@works.zip -F language=java -F title=lab3 http://localhost:8080/api/batches
+docker compose -f infra/docker-compose.yml up --build -d --wait
 ```
+
+Compose использует новые тома проекта `integritylens-v2`. Flyway применяет схему при первом старте API.
 
 - [Swagger UI](http://localhost:8080/swagger-ui.html)
-- [OpenAPI](http://localhost:8080/v3/api-docs)
+- [OpenAPI](http://localhost:8080/openapi.yaml)
 - [Healthcheck](http://localhost:8080/api/health)
 
-## Логи
-
 ```sh
-docker compose -f infra/docker-compose.yml logs -f api worker-jplag worker-structsim
-```
-
-## Shutdown
-
-С сохранением данных:
-
-```sh
+docker compose -f infra/docker-compose.yml logs -f api worker-structsim worker-ai
 docker compose -f infra/docker-compose.yml down
 ```
 
-С удалением данных:
-
-```sh
-docker compose -f infra/docker-compose.yml down -v
-```
-
-[Настройки и проверки](infra/README.md) · [API](api/README.md) ·
-[Воркеры](worker/README.md) · [Контракт анализа](worker/core/CONTRACT.md) · [Исследования](research/README.md)
+Настройки чистого развёртывания и HTTP-проверка описаны в [infra/README.md](infra/README.md). Схема, архитектура и контракты доступны на [сайте документации](https://itmo-red-team.github.io/IntegrityLens/). Локальную сборку сайта описывает [docs/contributing.md](docs/contributing.md).

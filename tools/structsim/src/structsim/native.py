@@ -21,6 +21,7 @@ from structsim.model import Program, Tile
 from structsim.tiles import MIN_TILE_LENGTH
 
 PROTOCOL = "structsim-native/1"
+SCOPED_PROTOCOL = "structsim-native/2"
 BINARY_ENV = "STRUCTSIM_NATIVE"
 BINARY_NAME = "structsim-native"
 _LOCAL_BUILD = Path(__file__).resolve().parents[2] / "native" / "target" / "release" / BINARY_NAME
@@ -69,7 +70,7 @@ def find_binary() -> str | None:
     return str(_LOCAL_BUILD) if _LOCAL_BUILD.is_file() else None
 
 
-def _encode(programs: Sequence[Program], min_tile: int, threads: int) -> str:
+def _encode(programs: Sequence[Program], min_tile: int, threads: int, targets: Sequence[bool] | None) -> str:
     ids: dict[str, int] = {}
 
     def numbered(labels: tuple[str, ...]) -> list[str]:
@@ -90,7 +91,10 @@ def _encode(programs: Sequence[Program], min_tile: int, threads: int) -> str:
     if len(ids) > MAX_ALPHABET:
         raise NativeError(f"меток {len(ids)}, поддерживается до {MAX_ALPHABET}")
     # Алфавит известен только после обхода программ, поэтому заголовок в конце.
-    header = f"{PROTOCOL} {len(programs)} {len(ids)} {min_tile} {threads} "
+    protocol = PROTOCOL if targets is None else SCOPED_PROTOCOL
+    header = f"{protocol} {len(programs)} {len(ids)} {min_tile} {threads} "
+    if targets is not None:
+        header += " ".join(str(int(target)) for target in targets) + " "
     return header + " ".join(parts)
 
 
@@ -126,19 +130,24 @@ def score_all(
     min_tile: int = MIN_TILE_LENGTH,
     threads: int = 0,
     binary: str | None = None,
+    *,
+    targets: Sequence[bool] | None = None,
 ) -> list[NativePair]:
     """Шаг 3 и тайлы по всем парам, в том же порядке, что `combinations(programs, 2)`.
 
     `min_tile=0` — без тайлов. `threads=0` — столько потоков, сколько доступно
     процессу. Направление пары как у `combinations`: `a` раньше `b` в `programs`,
     и `order` считается от `a` к `b`, как в `compare.explain(a, b)`.
+    Если указаны targets, хотя бы одна сторона каждой пары должна быть целевой.
     """
+    if targets is not None and len(targets) != len(programs):
+        raise ValueError("Target flags do not match programs")
     binary = binary or find_binary()
     if binary is None:
         raise NativeError(f"нет бинарника {BINARY_NAME}: см. docs/native.md")
     process = subprocess.run(
         [binary],
-        input=_encode(programs, min_tile, threads),
+        input=_encode(programs, min_tile, threads, targets),
         capture_output=True,
         text=True,
     )
@@ -146,6 +155,9 @@ def score_all(
         raise NativeError(f"{BINARY_NAME} вернул {process.returncode}: {process.stderr.strip()[:500]}")
     pairs = [_decode(line) for line in process.stdout.splitlines()]
     expected = len(programs) * (len(programs) - 1) // 2
+    if targets is not None:
+        source_count = len(programs) - sum(targets)
+        expected -= source_count * (source_count - 1) // 2
     if len(pairs) != expected:
         raise NativeError(f"{BINARY_NAME} вернул {len(pairs)} пар вместо {expected}")
     return pairs

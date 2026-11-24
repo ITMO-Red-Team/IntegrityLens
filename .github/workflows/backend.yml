@@ -2,14 +2,19 @@ name: Backend
 
 on:
   push:
-    paths: ['api/**', 'worker/**', 'infra/**', 'tools/structsim/**', 'tools/aicode/**', '.dockerignore', '.github/workflows/backend.yml']
+    paths: ['api/**', 'worker/**', 'infra/**', 'docs/openapi.yaml', 'tools/structsim/**', 'tools/aicode/**', '.dockerignore', '.github/workflows/backend.yml']
   pull_request:
-    paths: ['api/**', 'worker/**', 'infra/**', 'tools/structsim/**', 'tools/aicode/**', '.dockerignore', '.github/workflows/backend.yml']
+    paths: ['api/**', 'worker/**', 'infra/**', 'docs/openapi.yaml', 'tools/structsim/**', 'tools/aicode/**', '.dockerignore', '.github/workflows/backend.yml']
 
 jobs:
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      AI_BUILD_TARGET: ai-mock-worker
+      AI_ENGINE: mock
+      AI_METHOD_VERSION: aicode-mock/1
+      MAINTENANCE_INTERVAL: PT2S
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -33,16 +38,15 @@ jobs:
       - run: python -m pytest tools/structsim/tests -c tools/structsim/pyproject.toml
       - run: docker compose -p integritylens-ci -f infra/docker-compose.yml up --build -d --wait --wait-timeout 180
       - run: python infra/smoke_test.py
-      - run: python infra/export_openapi.py --check
       - run: |
-          docker compose -p integritylens-ci -f infra/docker-compose.yml stop worker-jplag worker-structsim
-          docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-jplag \
-            python -m unittest discover -s worker/tests -v
-          docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-jplag \
-            python -m unittest discover -s worker/core/tests -v
+          AI_MOCK_SCENARIO=partial docker compose -p integritylens-ci -f infra/docker-compose.yml \
+            up -d --no-deps --wait worker-ai
+          python infra/smoke_test.py --expect-ai-failure
+      - run: |
+          docker compose -p integritylens-ci -f infra/docker-compose.yml stop worker-ai worker-structsim
           docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-structsim \
-            python -m unittest discover -s worker/core/tests -v
+            python -m unittest discover -s worker/tests -v
       - if: failure()
-        run: docker compose -p integritylens-ci -f infra/docker-compose.yml logs --tail 100 api worker-jplag worker-structsim
+        run: docker compose -p integritylens-ci -f infra/docker-compose.yml logs --tail 100 api worker-structsim worker-ai
       - if: always()
         run: docker compose -p integritylens-ci -f infra/docker-compose.yml down -v

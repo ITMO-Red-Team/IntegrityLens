@@ -91,11 +91,11 @@ def _fragments(shown):
     return sorted(fragments, key=lambda f: (f["a"], f["b"]))
 
 
-def _reference_scores(programs, ids, min_tile):
+def _reference_scores(programs, pairs, min_tile):
     """Эталон на Python: те же числа, что у `native`. Для разработки без сборки Rust."""
     print("structsim-native not found, using slow reference implementation", file=sys.stderr)
     scores = {}
-    for a, b in combinations(ids, 2):
+    for a, b in pairs:
         first, second = programs[a], programs[b]
         measures = compare.explain(first, second)
         shown = [native.ShownTile(tile, first.span_of(tile.start_a, tile.length),
@@ -105,29 +105,34 @@ def _reference_scores(programs, ids, min_tile):
     return scores
 
 
-def _native_scores(programs, ids, min_tile, threads):
-    pairs = native.score_all([programs[sid] for sid in ids], min_tile=min_tile, threads=threads)
+def _native_scores(programs, ids, min_tile, threads, targets):
+    flags = None if targets is None else [sid in targets for sid in ids]
+    pairs = native.score_all([programs[sid] for sid in ids], min_tile=min_tile, threads=threads, targets=flags)
     return {(ids[pair.a], ids[pair.b]): ({"order": pair.order, "shingle": pair.shingle, "blocks": pair.blocks,
                                           "combined": pair.combined}, _fragments(pair.tiles))
             for pair in pairs}
 
 
-def analyze(job, input_dir, artifacts, watch):
-    params = merged_params(job, DEFAULT_PARAMS)
+def comparison_pairs(ids, targets=None):
+    if targets is None:
+        return combinations(ids, 2)
+    return ((a, b) for a, b in combinations(ids, 2) if a in targets or b in targets)
+
+
+def compare_sources(sources, params, watch, targets=None):
     min_tile = positive_int(params, "minTile")
     threads = available_cpus()
     sys.setrecursionlimit(RECURSION_LIMIT)
-    programs, failed = _to_programs(sources_of(job, input_dir), threads)
+    programs, failed = _to_programs(sources, threads)
     watch.lap("parse")
     ids = sorted(programs)
     if native.find_binary():
-        scores = _native_scores(programs, ids, min_tile, threads)
+        scores = _native_scores(programs, ids, min_tile, threads, targets)
     else:
-        scores = _reference_scores(programs, ids, min_tile)
+        scores = _reference_scores(programs, comparison_pairs(ids, targets), min_tile)
     watch.lap("compare")
-    # Фон пары считается по всему набору; при малом наборе шаг 4 не определён.
     z_scores = {}
-    if len(ids) >= contrast.MIN_SET_SIZE:
+    if len({sid for pair in scores for sid in pair}) >= contrast.MIN_SET_SIZE:
         z_scores = contrast.contrast_z({pair: measures["combined"] for pair, (measures, _) in scores.items()})
     scored = {}
     for pair, (measures, fragments) in scores.items():
@@ -135,6 +140,12 @@ def analyze(job, input_dir, artifacts, watch):
         if pair in z_scores:
             details["contrastZ"] = z_scores[pair]
         scored[pair] = {"value": measures["combined"], "details": details, "fragments": fragments}
+    return programs, scored, failed
+
+
+def analyze(job, input_dir, artifacts, watch):
+    params = merged_params(job, DEFAULT_PARAMS)
+    programs, scored, failed = compare_sources(sources_of(job, input_dir), params, watch)
     stats = {sid: {"labels": len(program.labels), "blocks": len(program.blocks)} for sid, program in programs.items()}
     result = assemble(job, METHOD_VERSION, params, scored, failed, stats)
     watch.lap("report")

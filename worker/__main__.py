@@ -1,7 +1,8 @@
+import hashlib
+import importlib
 import json
 import logging
 import os
-import re
 import signal
 import socket
 import subprocess
@@ -9,7 +10,7 @@ import sys
 import tempfile
 import threading
 import time
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from uuid import uuid4
 
 import boto3
@@ -18,31 +19,17 @@ from botocore.config import Config
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from worker.core.contract import CONTRACT, validate_result, validate_schema
-from worker.core.engine import Stopwatch
-
 LOG = logging.getLogger("worker")
-FILE_NAME = re.compile(r"[^/\\\0]+\.java")
-MAX_FILE_NAME_BYTES = 200
-STDERR_TAIL_BYTES = 2000
-# Эти параметры задаёт воркер. Из очереди они включили бы мок на настоящем методе.
 MOCK_PARAMS = ("mockScenario", "delaySeconds")
-
-
-class JsonFormatter(logging.Formatter):
-    def format(self, record):
-        return json.dumps({"timestamp": self.formatTime(record), "level": record.levelname,
-                           "message": record.getMessage(), "batchId": getattr(record, "batchId", None),
-                           "runId": getattr(record, "runId", None), "timings": getattr(record, "timings", None)})
-
-
-def log_fields(run):
-    return {"batchId": str(run["batch_id"]), "runId": str(run["id"])}
+LEASE = "interval '2 minutes'"
+OWNED = f"""id = %s and attempts = %s and locked_by = %s and status = 'running'
+            and heartbeat_at > clock_timestamp() - {LEASE}"""
 
 
 class RunError(Exception):
-    def __init__(self, message, retryable=True):
-        super().__init__(message)
+    def __init__(self, code, retryable=True):
+        super().__init__(code)
+        self.code = code
         self.retryable = retryable
 
 
@@ -53,9 +40,12 @@ class LeaseLost(Exception):
 class Worker:
     def __init__(self):
         self.method = os.environ["WORKER_METHOD"]
-        if self.method not in ("jplag", "structsim"):
-            raise ValueError("Unknown WORKER_METHOD")
-        self.database = os.environ["DATABASE_URL"]
+        contract_module, self.engine_module = {
+            "structsim": ("worker.core.v2", "worker.core.v2"),
+            "ai": ("worker.ai.contract", "worker.ai"),
+        }[self.method]
+        self.contract = importlib.import_module(contract_module)
+        self.database = os.getenv("DATABASE_URL", "")
         self.worker_id = f"{socket.gethostname()}-{uuid4()}"
         self.bucket = os.getenv("S3_BUCKET", "integritylens")
         self.engine = os.getenv("CORE_ENGINE", "real")
@@ -65,6 +55,11 @@ class Worker:
         self.scenario = os.getenv("MOCK_SCENARIO", "success")
         if self.scenario not in ("success", "partial", "fail_once", "tool_error", "invalid_input"):
             raise ValueError("Unknown MOCK_SCENARIO")
+        version_module = self.contract if self.method == "structsim" else importlib.import_module("worker.ai.version")
+        self.version = version_module.MOCK_VERSION if self.engine == "mock" else version_module.method_version()
+        configured = os.getenv("WORKER_METHOD_VERSION", self.version)
+        if configured != self.version:
+            raise ValueError(f"{self.method} method version mismatch: configured {configured}, image {self.version}")
         self.timeout = float(os.getenv("CORE_TIMEOUT_SECONDS", "600"))
         self.stop = threading.Event()
         self.s3 = boto3.client("s3", endpoint_url=os.environ["S3_ENDPOINT"], region_name="us-east-1",
@@ -78,31 +73,37 @@ class Worker:
 
     def claim(self):
         with self.connect() as db:
-            db.execute("""
-                update runs set status = 'failed', finished_at = now(),
-                    error = 'Worker heartbeat expired after final attempt', locked_by = null
-                where method = %s and status = 'running' and attempts >= max_attempts
-                    and heartbeat_at < now() - interval '2 minutes'
-                """, (self.method,))
-            return db.execute("""
-                update runs set status = 'running', attempts = attempts + 1, locked_by = %s,
-                    started_at = now(), heartbeat_at = now(), finished_at = null, error = null
+            db.execute(f"""
+                update analysis_runs set status = 'failed', finished_at = now(), error_code = 'LEASE_EXPIRED',
+                    locked_by = null, heartbeat_at = null
+                where id in (
+                    select id from analysis_runs where method = %s and method_version = %s
+                        and status = 'running' and attempts >= max_attempts
+                        and heartbeat_at <= clock_timestamp() - {LEASE}
+                    for update skip locked
+                )
+                """, (self.method, self.version))
+            return db.execute(f"""
+                update analysis_runs set status = 'running', attempts = attempts + 1, locked_by = %s,
+                    started_at = now(), heartbeat_at = clock_timestamp(), finished_at = null, error_code = null
                 where id = (
-                    select id from runs where method = %s and attempts < max_attempts
+                    select id from analysis_runs where method = %s and method_version = %s and attempts < max_attempts
                         and (status = 'queued' or (status = 'running'
-                            and heartbeat_at < now() - interval '2 minutes'))
+                            and heartbeat_at <= clock_timestamp() - {LEASE}))
                     order by created_at, id for update skip locked limit 1
                 ) returning *
-                """, (self.worker_id, self.method)).fetchone()
+                """, (self.worker_id, self.method, self.version)).fetchone()
+
+    def owner(self, run):
+        return run["id"], run["attempts"], self.worker_id
 
     def heartbeat(self, run, finished, lost):
         while not finished.wait(15):
             try:
                 with self.connect() as db:
-                    changed = db.execute("""
-                        update runs set heartbeat_at = now()
-                        where id = %s and attempts = %s and locked_by = %s and status = 'running'
-                        """, (run["id"], run["attempts"], self.worker_id)).rowcount
+                    changed = db.execute(f"""
+                        update analysis_runs set heartbeat_at = clock_timestamp() where {OWNED}
+                        """, self.owner(run)).rowcount
                 if changed != 1:
                     lost.set()
                     return
@@ -111,144 +112,166 @@ class Worker:
                 return
 
     def params(self, run):
-        """Параметры запуска. Сценарий мока — тоже параметр: по нему core выбирает мок."""
-        if self.engine != "mock":
-            if any(name in run["params"] for name in MOCK_PARAMS):
-                raise RunError("Mock params are not allowed for a real method", False)
+        if any(name in run["params"] for name in MOCK_PARAMS):
+            raise RunError("INVALID_JOB", False)
+        if self.engine == "real":
             return run["params"]
         scenario = self.scenario
         if scenario == "fail_once":
             scenario = "tool_error" if run["attempts"] == 1 else "success"
         return {**run["params"], "mockScenario": scenario, "delaySeconds": self.delay}
 
-    def download(self, submission, input_dir):
+    def download(self, submission, root):
         sid = str(submission["id"])
-        # Исходное имя остаётся в API, а методам оно не важно, и из-за неудобного имени
-        # (`.java`, слишком длинное для файловой системы) не должен падать весь пакет.
-        name = PurePosixPath(submission["original_name"]).name
-        if not FILE_NAME.fullmatch(name) or len(name.encode()) > MAX_FILE_NAME_BYTES:
-            name = "Main.java"
-        destination = input_dir / "submissions" / sid / name
+        path = Path("input", "submissions", sid, "source.java")
+        destination = root / path
         destination.parent.mkdir(parents=True)
         response = self.s3.get_object(Bucket=self.bucket, Key=submission["storage_key"])
-        try:
-            destination.write_bytes(response["Body"].read())
-        finally:
-            response["Body"].close()
-        return {"id": sid, "language": submission["language"], "files": [name]}
+        with response["Body"] as body:
+            data = body.read()
+        if hashlib.sha256(data).hexdigest() != submission["sha256"]:
+            raise RunError("SOURCE_MISMATCH", False)
+        destination.write_bytes(data)
+        return path.as_posix(), data
 
     def core_command(self, input_dir, output_dir):
-        return [sys.executable, "-m", "worker.core", "run", "--input", str(input_dir), "--output", str(output_dir)]
+        command = [sys.executable, "-m", self.engine_module]
+        if self.method == "ai":
+            command.append("run")
+        return [*command, "--input", str(input_dir), "--output", str(output_dir)]
 
-    def run_core(self, input_dir, output_dir, lost, fields=None):
-        # Своя группа процессов: у core есть дети (JVM, semgrep-core), и kill только
-        # самого core оставил бы их работать дальше без присмотра.
-        with tempfile.TemporaryFile() as stderr:
-            process = subprocess.Popen(self.core_command(input_dir, output_dir), stdout=subprocess.DEVNULL,
-                                       stderr=stderr, start_new_session=True)
-            try:
-                deadline = time.monotonic() + self.timeout
-                while True:
-                    try:
-                        process.wait(timeout=0.1)
-                        break
-                    except subprocess.TimeoutExpired:
-                        pass
+    def run_core(self, input_dir, output_dir, lost):
+        process = subprocess.Popen(self.core_command(input_dir, output_dir), stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL, start_new_session=True)
+        try:
+            deadline = time.monotonic() + self.timeout
+            while True:
+                try:
+                    process.wait(timeout=0.1)
+                    break
+                except subprocess.TimeoutExpired:
                     if lost.is_set() or self.stop.is_set():
                         raise LeaseLost()
                     if time.monotonic() >= deadline:
-                        # Тот же вход не уложится и в следующий раз, а воркер у метода один.
-                        raise RunError("Core timeout", False)
-            finally:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except (ProcessLookupError, PermissionError):
-                    pass
-                process.wait()
-            stderr.seek(-min(STDERR_TAIL_BYTES, stderr.seek(0, os.SEEK_END)), os.SEEK_END)
-            tail = stderr.read().decode("utf-8", "replace").strip()
-            if process.returncode != 0:
-                LOG.warning("Core failed: %s", tail, extra=fields)
-                raise RunError(f"Core exited with code {process.returncode}", process.returncode != 2)
-            # И при успехе: core пишет сюда, почему не разобран файл и что считает эталоном вместо native.
-            if tail:
-                LOG.info("Core stderr: %s", tail, extra=fields)
+                        raise RunError("RUN_TIMEOUT", False)
+        finally:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            process.wait()
+        if process.returncode == 2:
+            raise RunError("INVALID_JOB", False)
+        if process.returncode != 0:
+            raise RunError("TOOL_ERROR")
 
     def execute(self, run, lost):
-        watch = Stopwatch()
-        with tempfile.TemporaryDirectory(prefix="integritylens-") as folder:
+        with tempfile.TemporaryDirectory(prefix="integritylens-") as folder, self.connect() as db:
             root = Path(folder)
             input_dir, output_dir = root / "input", root / "output"
             input_dir.mkdir()
-            with self.connect() as db:
-                submissions = db.execute("select * from submissions where batch_id = %s order by id",
-                                         (run["batch_id"],)).fetchall()
-            job = {"contract": CONTRACT, "runId": str(run["id"]), "method": self.method, "params": self.params(run),
-                   "submissions": [self.download(submission, input_dir) for submission in submissions]}
-            validate_schema("job", job)
+            job = {"contract": run["contract_version"], "runId": str(run["id"]),
+                   "methodVersion": run["method_version"], "params": self.params(run)}
+            if self.method == "structsim":
+                rows = db.execute("""
+                    select s.id, s.storage_key, s.sha256, i.scope
+                    from analysis_run_inputs i join submissions s on s.id = i.submission_id
+                    where i.run_id = %s order by s.id
+                    """, (run["id"],)).fetchall()
+                inputs = []
+                for row in rows:
+                    if lost.is_set() or self.stop.is_set():
+                        raise LeaseLost()
+                    self.download(row, root)
+                    inputs.append({"id": str(row["id"]), "language": "java", "files": ["source.java"],
+                                   "scope": row["scope"]})
+                job.update(method=self.method, revision=run["revision"], submissions=inputs)
+                self.contract.validate_job(job)
+            else:
+                submission = db.execute("""
+                    select id, storage_key, sha256 from submissions where id = %s
+                    """, (run["submission_id"],)).fetchone()
+                if submission is None:
+                    raise LeaseLost()
+                path, data = self.download(submission, root)
+                sid = str(submission["id"])
+                job["inputFiles"] = [{"submissionId": sid, "path": path}]
+                self.contract.validate_schema("job", job)
+
             (input_dir / "job.json").write_text(json.dumps(job), encoding="utf-8")
-            watch.lap("download")
-            self.run_core(input_dir, output_dir, lost, log_fields(run))
-            watch.lap("core")
-            raw = (output_dir / "result.json").read_text(encoding="utf-8")
-            result = json.loads(raw)
-            validate_result(job, result)
-            watch.lap("validate")
-            if lost.is_set():
+            self.run_core(input_dir, output_dir, lost)
+            result = json.loads((output_dir / "result.json").read_text(encoding="utf-8"))
+            try:
+                if self.method == "structsim":
+                    self.contract.validate_result(job, result)
+                else:
+                    self.contract.validate_result(job, result, {sid: data})
+            except ValueError as error:
+                raise RunError("INVALID_RESULT", False) from error
+            if lost.is_set() or self.stop.is_set():
                 raise LeaseLost()
-            prefix = f"runs/{run['id']}/attempt-{run['attempts']}/"
-            for artifact in output_dir.rglob("*"):
-                if artifact.is_file():
-                    self.s3.upload_file(str(artifact), self.bucket, prefix + artifact.relative_to(output_dir).as_posix())
-            watch.lap("upload")
-            with self.connect() as db:
-                changed = db.execute("""
-                    update runs set status = 'done', result = %s::jsonb, finished_at = now(),
-                        method_version = %s, params = %s, artifacts_prefix = %s, error = null, locked_by = null
-                    where id = %s and attempts = %s and locked_by = %s and status = 'running'
-                    """, (raw, result["methodVersion"], Jsonb(result["params"]), prefix,
-                          run["id"], run["attempts"], self.worker_id)).rowcount
+            self.publish(db, run, result)
+
+    def publish(self, db, run, result):
+        with db.transaction():
+            if self.method == "structsim":
+                assignment = db.execute("""
+                    select similarity_revision, deleted_at from assignments where id = %s for share
+                    """, (run["assignment_id"],)).fetchone()
+                if assignment is None or assignment["deleted_at"] is not None \
+                        or assignment["similarity_revision"] != run["revision"]:
+                    raise LeaseLost()
+            changed = db.execute(f"""
+                update analysis_runs set status = 'done', params = %s, finished_at = now(),
+                    locked_by = null, heartbeat_at = null, error_code = null
+                where {OWNED}
+                """, (Jsonb(result["params"]), *self.owner(run))).rowcount
             if changed != 1:
                 raise LeaseLost()
-            watch.lap("commit")
-            return watch.timings
+            if self.method == "structsim":
+                with db.cursor() as cursor:
+                    cursor.executemany("""
+                        insert into similarity_results(run_id, a, b, value, reason_code, details, fragments)
+                        values (%s, %s, %s, %s, %s, %s, %s)
+                        """, ((run["id"], pair["a"], pair["b"], pair["value"], pair.get("reason", {}).get("code"),
+                               Jsonb(pair["details"]), Jsonb(pair["fragments"])) for pair in result["pairs"]))
+            else:
+                file = result["files"][0]
+                db.execute("""
+                    insert into ai_results(run_id, score, suspicious, reason_code) values (%s, %s, %s, %s)
+                    """, (run["id"], file["score"], Jsonb(file["suspicious"]), file.get("reason", {}).get("code")))
 
     def release(self, run):
-        """Остановка воркера — не вина задания: попытка не считается, и ждать аренду незачем."""
         with self.connect() as db:
-            db.execute("""
-                update runs set status = 'queued', attempts = attempts - 1, started_at = null,
-                    locked_by = null, heartbeat_at = null
-                where id = %s and attempts = %s and locked_by = %s and status = 'running'
-                """, (run["id"], run["attempts"], self.worker_id))
+            db.execute(f"""
+                update analysis_runs set status = 'queued', attempts = attempts - 1, started_at = null,
+                    locked_by = null, heartbeat_at = null where {OWNED}
+                """, self.owner(run))
 
     def fail(self, run, error):
-        retryable = error.retryable if isinstance(error, RunError) else True
-        message = str(error) if isinstance(error, RunError) else f"Worker operation failed ({type(error).__name__})"
         with self.connect() as db:
-            db.execute("""
-                update runs set status = case when %s and attempts < max_attempts then 'queued' else 'failed' end,
+            db.execute(f"""
+                update analysis_runs set status = case when %s and attempts < max_attempts then 'queued' else 'failed' end,
                     finished_at = case when %s and attempts < max_attempts then null else now() end,
-                    error = %s, locked_by = null, heartbeat_at = null
-                where id = %s and attempts = %s and locked_by = %s and status = 'running'
-                """, (retryable, retryable, message, run["id"], run["attempts"], self.worker_id))
+                    error_code = %s, locked_by = null, heartbeat_at = null where {OWNED}
+                """, (error.retryable, error.retryable, error.code, *self.owner(run)))
 
     def process(self, run):
-        fields = log_fields(run)
         finished, lost = threading.Event(), threading.Event()
         heartbeat = threading.Thread(target=self.heartbeat, args=(run, finished, lost), daemon=True)
         heartbeat.start()
         try:
-            LOG.info("Run started", extra=fields)
-            timings = self.execute(run, lost)
-            LOG.info("Run completed", extra={**fields, "timings": timings})
+            LOG.info("Run started %s attempt %s", run["id"], run["attempts"])
+            self.execute(run, lost)
+            LOG.info("Run completed %s", run["id"])
         except LeaseLost:
             if self.stop.is_set():
                 self.release(run)
-            LOG.warning("Run interrupted or lease lost", extra=fields)
+            LOG.info("Run interrupted or lease lost %s", run["id"])
         except Exception as error:
-            self.fail(run, error)
-            LOG.warning("Run failed: %s", type(error).__name__, extra=fields)
+            failure = error if isinstance(error, RunError) else RunError("WORKER_ERROR")
+            self.fail(run, failure)
+            LOG.warning("Run %s failed: %s (%s)", run["id"], failure.code, type(error).__name__)
         finally:
             finished.set()
             heartbeat.join(timeout=10)
@@ -267,9 +290,7 @@ class Worker:
 
 
 def main():
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    logging.basicConfig(level=logging.INFO, handlers=[handler])
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     worker = Worker()
     signal.signal(signal.SIGTERM, lambda *_: worker.stop.set())
     signal.signal(signal.SIGINT, lambda *_: worker.stop.set())

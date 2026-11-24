@@ -11,10 +11,11 @@ RUN python /tmp/fetch_model.py --url "$AICODE_MODEL_URL" --sha256 "$AICODE_MODEL
 
 # Общая часть: зависимости aicode и проверки контракта. Сборка заканчивается проверкой
 # контракта на известном ответе — без модели, поэтому работает везде.
+FROM ghcr.io/astral-sh/uv:0.8.15 AS uv
 FROM python:3.11-slim AS ai-base
 
 ENV UV_LINK_MODE=copy \
-    UV_NO_CACHE=1 \
+    UV_HTTP_TIMEOUT=120 \
     PYTHONPATH=/app/src \
     PATH=/app/.venv/bin:${PATH}
 WORKDIR /app
@@ -24,16 +25,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 app
 
+COPY --from=uv /uv /usr/local/bin/uv
 COPY tools/aicode/pyproject.toml tools/aicode/uv.lock ./
-RUN pip install --no-cache-dir uv==0.8.15 \
-    && uv sync --frozen --no-dev --no-install-project \
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project \
     && uv pip install --python .venv/bin/python --no-deps \
        "git+https://github.com/ai-forever/gigacheck.git@8cdbe6a1ce628b49b4aa0794edf7a425a47a774c"
 
-RUN uv pip install --python .venv/bin/python fastjsonschema==2.22.2
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install --python .venv/bin/python fastjsonschema==2.22.2
 
 COPY tools/aicode/src ./src
-COPY worker worker
+COPY worker/__init__.py worker/__init__.py
+COPY worker/ai worker/ai
 
 RUN python -m worker.ai.selfcheck mock
 
@@ -58,3 +60,21 @@ RUN mkdir -p /home/app && chown -R app:app /home/app
 USER app
 ENTRYPOINT ["python", "-m", "worker.ai"]
 CMD ["--help"]
+
+FROM ai AS ai-worker
+USER root
+COPY worker/requirements.txt worker/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install --python .venv/bin/python -r worker/requirements.txt
+COPY worker/__main__.py worker/__main__.py
+USER app
+ENTRYPOINT ["python", "-m", "worker"]
+CMD []
+
+FROM python:3.12.11-slim AS ai-mock-worker
+WORKDIR /app
+COPY worker/requirements.txt worker/requirements.txt
+RUN pip install --no-cache-dir -r worker/requirements.txt && useradd --system --uid 10001 app
+COPY worker/__init__.py worker/__main__.py worker/
+COPY worker/ai worker/ai
+USER app
+ENTRYPOINT ["python", "-m", "worker"]

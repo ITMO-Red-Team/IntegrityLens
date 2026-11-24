@@ -1,5 +1,7 @@
 # Контракт core v1
 
+Формат для офлайн-запуска и исследований. Очередь backend использует [контракт Structsim v2](../../docs/contracts.md#контракты-воркеров).
+
 Вход: `input/job.json` и `input/submissions/{submissionId}/{filename.java}`.
 Работа содержит один файл, ID — UUID, имя файла — basename; исходный путь остаётся в API.
 Методы: `jplag`, `structsim`. Схемы: [job](schemas/job.schema.json), [result](schemas/result.schema.json).

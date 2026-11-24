@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "runId", "revision", "method", "methodVersion", "params", "pairs"],
+  "properties": {
+    "contract": {"const": "integritylens.core/2"},
+    "runId": {"type": "string", "format": "uuid"},
+    "revision": {"type": "integer", "minimum": 0},
+    "method": {"const": "structsim"},
+    "methodVersion": {"type": "string", "minLength": 1},
+    "params": {"type": "object"},
+    "pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["a", "b", "value", "details", "fragments"],
+        "properties": {
+          "a": {"type": "string", "format": "uuid"},
+          "b": {"type": "string", "format": "uuid"},
+          "value": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "details": {"type": "object", "additionalProperties": {"type": "number"}},
+          "fragments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["a", "b"],
+              "properties": {
+                "a": {"$ref": "#/$defs/range"},
+                "b": {"$ref": "#/$defs/range"}
+              }
+            }
+          },
+          "reason": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code"],
+            "properties": {
+              "code": {"type": "string", "minLength": 1},
+              "message": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "range": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"type": "integer", "minimum": 1}
+    }
+  }
+}

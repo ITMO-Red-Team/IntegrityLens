@@ -5,6 +5,7 @@ import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { resetDb } from "../mocks/db";
 import { handlers } from "../mocks/handlers";
+import { targetHandlers } from "../mocks/target-handlers";
 
 const NativeFormData = (
   await new Response("", { headers: { "content-type": "application/x-www-form-urlencoded" } }).formData()
@@ -18,7 +19,10 @@ globalThis.Request = class extends NativeRequest {
   }
 } as typeof Request;
 
-export const server = setupServer(...handlers);
+export const server = setupServer(
+  ...targetHandlers,
+  ...handlers,
+);
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {

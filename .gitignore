@@ -3,6 +3,7 @@ dist/
 reports/
 .env.*
 **/target/
+!web/src/api/target/
 **/__pycache__/
 *.pyc
 .venv/

@@ -1,5 +1,4 @@
 import concurrent.futures
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,9 +10,7 @@ from worker.__main__ import LeaseLost, RunError, Worker
 
 class QueueTest(unittest.TestCase):
     def setUp(self):
-        # Прогон ai требует привязки к сдаче, поэтому для механики очереди пиним пакетный метод.
-        with mock.patch.dict(os.environ, {"WORKER_METHOD": "jplag"}):
-            self.first, self.second = Worker(), Worker()
+        self.first, self.second = Worker(), Worker()
         self.batch_id, self.run_id = uuid4(), uuid4()
         with self.first.connect() as db:
             db.execute("""insert into batches(id, title, language, archive_name, archive_sha256, submission_count)

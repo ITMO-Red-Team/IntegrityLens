@@ -6,7 +6,7 @@
 GitHub Pages описаны в [docs/contributing.md](docs/contributing.md).
 Конфигурация сайта — [mkdocs.yml](mkdocs.yml).
 
-Бэкенд сравнения Java-работ: API, три воркера (JPlag, structsim и AI-детектор), PostgreSQL и MinIO.
+Бэкенд сравнения Java-работ: API, два воркера (JPlag и structsim), PostgreSQL и MinIO.
 
 ## Запуск
 
@@ -22,7 +22,7 @@ curl -F archive=@works.zip -F language=java -F title=lab3 http://localhost:8080/
 ## Логи
 
 ```sh
-docker compose -f infra/docker-compose.yml logs -f api worker-jplag worker-structsim worker-ai
+docker compose -f infra/docker-compose.yml logs -f api worker-jplag worker-structsim
 ```
 
 ## Shutdown

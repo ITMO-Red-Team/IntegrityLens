@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useBatch, useLabels, usePair, usePairs } from "../../api/hooks";
 import { ErrorBox, Loading, PageHeader } from "../../components/ui";
-import { batchProgress } from "../../lib/batch";
 import { METHODS } from "../../lib/constants";
 import { pairLabel } from "../../lib/labels";
 import { sortPairs } from "../../lib/queue";
@@ -15,9 +14,9 @@ export function CompareIndex() {
   const { batchId = "" } = useParams();
   const { method, search } = useQueueParams();
   const batch = useBatch(batchId);
-  const { ready } = batchProgress(batch.data);
-  const { data, error, refetch } = usePairs(batchId, ready);
-  if (batch.data && !ready) return <Loading what="Пакет ещё обрабатывается" />;
+  const done = batch.data?.status === "done";
+  const { data, error, refetch } = usePairs(batchId, done);
+  if (batch.data && !done) return <Loading what="Пакет ещё обрабатывается" />;
   if (error) return <ErrorBox error={error} retry={refetch} />;
   if (!data) return <Loading what="Ищу пары" />;
   const top = sortPairs(data.pairs, method)[0];
@@ -29,11 +28,8 @@ export function ComparePage() {
   const { batchId = "", pairId = "" } = useParams();
   const navigate = useNavigate();
   const { method, search } = useQueueParams();
-  // Сюда попадают по первому готовому методу: пока второй идёт, оценки догоняют, а пакет
-  // опрашивается только до конца сравнения — работа AI на этой странице не нужна.
-  const { comparing } = batchProgress(useBatch(batchId, (b) => batchProgress(b).comparing).data);
-  const pairQ = usePair(pairId, comparing);
-  const listQ = usePairs(batchId, true, comparing);
+  const pairQ = usePair(pairId);
+  const listQ = usePairs(batchId);
   const label = useLabels(batchId);
 
   const [showRegions, setShowRegions] = useState(true);

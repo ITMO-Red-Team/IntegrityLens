@@ -18,9 +18,6 @@ from botocore.config import Config
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from worker.ai.contract import CONTRACT as AI_CONTRACT, validate_result as validate_ai_result, \
-    validate_schema as validate_ai_schema
-from worker.ai.version import MOCK_VERSION as AI_MOCK_VERSION, method_version as ai_method_version
 from worker.core.contract import CONTRACT, validate_result, validate_schema
 from worker.core.engine import Stopwatch
 
@@ -56,7 +53,7 @@ class LeaseLost(Exception):
 class Worker:
     def __init__(self):
         self.method = os.environ["WORKER_METHOD"]
-        if self.method not in ("jplag", "structsim", "ai"):
+        if self.method not in ("jplag", "structsim"):
             raise ValueError("Unknown WORKER_METHOD")
         self.database = os.environ["DATABASE_URL"]
         self.worker_id = f"{socket.gethostname()}-{uuid4()}"
@@ -141,8 +138,7 @@ class Worker:
         return {"id": sid, "language": submission["language"], "files": [name]}
 
     def core_command(self, input_dir, output_dir):
-        module = "worker.ai" if self.method == "ai" else "worker.core"
-        return [sys.executable, "-m", module, "run", "--input", str(input_dir), "--output", str(output_dir)]
+        return [sys.executable, "-m", "worker.core", "run", "--input", str(input_dir), "--output", str(output_dir)]
 
     def run_core(self, input_dir, output_dir, lost, fields=None):
         # Своя группа процессов: у core есть дети (JVM, semgrep-core), и kill только
@@ -185,39 +181,18 @@ class Worker:
             input_dir, output_dir = root / "input", root / "output"
             input_dir.mkdir()
             with self.connect() as db:
-                # Прогон ai привязан к сдаче, методы сравнения берут весь пакет.
-                if self.method == "ai":
-                    submissions = db.execute("select * from submissions where id = %s",
-                                             (run["submission_id"],)).fetchall()
-                else:
-                    submissions = db.execute("select * from submissions where batch_id = %s order by id",
-                                             (run["batch_id"],)).fetchall()
-            downloads = [self.download(submission, input_dir) for submission in submissions]
-            if self.method == "ai":
-                job = {"contract": AI_CONTRACT, "runId": str(run["id"]),
-                       "methodVersion": AI_MOCK_VERSION if self.engine == "mock" else ai_method_version(),
-                       "params": self.params(run),
-                       "inputFiles": [{"submissionId": entry["id"],
-                                       "path": f"input/submissions/{entry['id']}/{entry['files'][0]}"}
-                                      for entry in downloads]}
-                validate_ai_schema("job", job)
-            else:
-                job = {"contract": CONTRACT, "runId": str(run["id"]), "method": self.method,
-                       "params": self.params(run), "submissions": downloads}
-                validate_schema("job", job)
+                submissions = db.execute("select * from submissions where batch_id = %s order by id",
+                                         (run["batch_id"],)).fetchall()
+            job = {"contract": CONTRACT, "runId": str(run["id"]), "method": self.method, "params": self.params(run),
+                   "submissions": [self.download(submission, input_dir) for submission in submissions]}
+            validate_schema("job", job)
             (input_dir / "job.json").write_text(json.dumps(job), encoding="utf-8")
             watch.lap("download")
             self.run_core(input_dir, output_dir, lost, log_fields(run))
             watch.lap("core")
             raw = (output_dir / "result.json").read_text(encoding="utf-8")
             result = json.loads(raw)
-            if self.method == "ai":
-                # Содержимое, а не только размер: границы фрагментов проверяются по символам UTF-8.
-                sources = {entry["id"]: (input_dir / "submissions" / entry["id"] / entry["files"][0]).read_bytes()
-                           for entry in downloads}
-                validate_ai_result(job, result, sources)
-            else:
-                validate_result(job, result)
+            validate_result(job, result)
             watch.lap("validate")
             if lost.is_set():
                 raise LeaseLost()

@@ -16,7 +16,7 @@ docker compose --env-file .env -f infra/docker-compose.yml up --build -d
 Из корня, с Python и зависимостями из `infra/requirements.txt`:
 
 ```sh
-API_PORT=18080 AICODE_ENGINE=mock docker compose -p integritylens-check -f infra/docker-compose.yml up --build -d
+API_PORT=18080 docker compose -p integritylens-check -f infra/docker-compose.yml up --build -d
 python3 infra/smoke_test.py --base http://localhost:18080
 python3 infra/export_openapi.py --base http://localhost:18080 --check
 ```
@@ -26,7 +26,7 @@ python3 infra/export_openapi.py --base http://localhost:18080 --check
 остановите воркеры:
 
 ```sh
-docker compose -p integritylens-check -f infra/docker-compose.yml stop worker-jplag worker-structsim worker-ai
+docker compose -p integritylens-check -f infra/docker-compose.yml stop worker-jplag worker-structsim
 docker compose -p integritylens-check -f infra/docker-compose.yml run --rm --no-deps worker-jplag \
   python -m unittest discover -s worker/tests -v
 docker compose -p integritylens-check -f infra/docker-compose.yml run --rm --no-deps worker-jplag \

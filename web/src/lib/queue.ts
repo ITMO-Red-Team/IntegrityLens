@@ -1,4 +1,4 @@
-import type { ComparisonMethod, Decision, PairSummary } from "../api/types";
+import type { Decision, Method, PairSummary } from "../api/types";
 
 export type RiskLevel = "high" | "mid" | "low";
 export const HIGH_RISK = 70;
@@ -14,12 +14,12 @@ export const DECISION_LABEL: Record<Decision, string> = {
   false_positive: "ложное",
 };
 
-export function scorePct(p: PairSummary, method: ComparisonMethod): number | null {
+export function scorePct(p: PairSummary, method: Method): number | null {
   const v = p.scores[method]?.value;
   return v === null || v === undefined ? null : Math.round(v * 100);
 }
 
-export function sortPairs(pairs: PairSummary[], method: ComparisonMethod): PairSummary[] {
+export function sortPairs(pairs: PairSummary[], method: Method): PairSummary[] {
   return [...pairs].sort((x, y) => {
     const a = x.scores[method]?.value ?? -1;
     const b = y.scores[method]?.value ?? -1;
@@ -27,7 +27,7 @@ export function sortPairs(pairs: PairSummary[], method: ComparisonMethod): PairS
   });
 }
 
-export function reviewQueue(pairs: PairSummary[], method: ComparisonMethod, threshold: number, k: number) {
+export function reviewQueue(pairs: PairSummary[], method: Method, threshold: number, k: number) {
   return sortPairs(pairs, method)
     .filter((p) => (scorePct(p, method) ?? -1) >= threshold)
     .slice(0, k);
@@ -40,7 +40,7 @@ export interface QueueMetrics {
   falseAlarmRate: number | null;
 }
 
-export function queueMetrics(pairs: PairSummary[], method: ComparisonMethod, threshold: number, k: number): QueueMetrics {
+export function queueMetrics(pairs: PairSummary[], method: Method, threshold: number, k: number): QueueMetrics {
   const q = reviewQueue(pairs, method, threshold, k);
   const rated = q.filter((p) => p.decision);
   const confirmed = rated.filter((p) => p.decision === "confirmed").length;
@@ -53,7 +53,7 @@ export function queueMetrics(pairs: PairSummary[], method: ComparisonMethod, thr
   };
 }
 
-export function suggestThreshold(pairs: PairSummary[], method: ComparisonMethod): number | null {
+export function suggestThreshold(pairs: PairSummary[], method: Method): number | null {
   const of = (d: Decision) =>
     pairs.filter((p) => p.decision === d).map((p) => scorePct(p, method)).filter((v): v is number => v !== null);
   const confirmed = of("confirmed");
@@ -64,7 +64,7 @@ export function suggestThreshold(pairs: PairSummary[], method: ComparisonMethod)
   return Math.min(100, candidate);
 }
 
-export function clusters(ids: string[], pairs: PairSummary[], method: ComparisonMethod, threshold: number): string[][] {
+export function clusters(ids: string[], pairs: PairSummary[], method: Method, threshold: number): string[][] {
   const parent = new Map(ids.map((id) => [id, id]));
   const find = (x: string): string => {
     const p = parent.get(x) ?? x;

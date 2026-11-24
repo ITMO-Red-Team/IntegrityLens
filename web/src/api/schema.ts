@@ -243,7 +243,7 @@ export interface components {
             /** Format: date-time */
             finishedAt: string | null;
             /** @enum {string} */
-            method: "jplag" | "structsim" | "ai";
+            method: "jplag" | "structsim";
             methodVersion: string | null;
             /** Format: int32 */
             parsed: number | null;

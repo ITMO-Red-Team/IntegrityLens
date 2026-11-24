@@ -4,11 +4,9 @@ import static org.integritylens.api.ApiModels.*;
 import static org.integritylens.api.BackendRepository.*;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -20,7 +18,6 @@ public class QueryService {
     private final ObjectMapper mapper;
 
     record MethodResult(RunRow run, Map<String, CoreSubmission> submissions, Map<String, CorePair> pairs) {}
-    record AiEntry(RunRow run, AiFile file) {}
     record PairKey(UUID batchId, UUID a, UUID b) {}
 
     public QueryService(BackendRepository repository, ObjectStorage storage, ObjectMapper mapper) {
@@ -39,19 +36,14 @@ public class QueryService {
 
     private Batch batch(BatchRow row) {
         var runs = repository.runs(row.id());
-        List<Run> summaries = new ArrayList<>();
-        for (var run : runs) {
-            if ("ai".equals(run.method())) continue;
+        var summaries = runs.stream().map(run -> {
             var result = result(run);
             Integer parsed = result == null ? null : (int) result.submissions().stream()
                     .filter(s -> "ok".equals(s.status())).count();
             Integer failed = result == null ? null : result.submissions().size() - parsed;
-            summaries.add(new Run(run.method(), run.version(), run.status(), run.startedAt(), run.finishedAt(),
-                    parsed, failed, run.error()));
-        }
-        // AI has one run per submission; the batch lists a single summary of them.
-        var aiRuns = runs.stream().filter(r -> "ai".equals(r.method())).toList();
-        if (!aiRuns.isEmpty()) summaries.add(aiSummary(aiRuns));
+            return new Run(run.method(), run.version(), run.status(), run.startedAt(), run.finishedAt(),
+                    parsed, failed, run.error());
+        }).toList();
         String status;
         if (runs.stream().allMatch(r -> "queued".equals(r.status()))) status = "queued";
         else if (runs.stream().anyMatch(r -> "queued".equals(r.status()) || "running".equals(r.status()))) status = "processing";
@@ -61,38 +53,9 @@ public class QueryService {
                 row.count() * (row.count() - 1) / 2, summaries);
     }
 
-    private Run aiSummary(List<RunRow> runs) {
-        String status;
-        boolean pending = runs.stream().anyMatch(r -> "queued".equals(r.status()) || "running".equals(r.status()));
-        if (runs.stream().allMatch(r -> "queued".equals(r.status()))) status = "queued";
-        else if (pending) status = "running";
-        else if (runs.stream().anyMatch(r -> "done".equals(r.status()))) status = "done";
-        else status = "failed";
-        Integer parsed = null, failed = null;
-        String version = null;
-        if ("done".equals(status)) {
-            parsed = 0;
-            for (var run : runs) {
-                var result = aiResult(run);
-                parsed += result != null && !result.files().isEmpty()
-                        && "ok".equals(result.files().getFirst().status()) ? 1 : 0;
-            }
-            failed = runs.size() - parsed;
-            var versions = runs.stream().map(RunRow::version).filter(Objects::nonNull).distinct().toList();
-            version = versions.size() == 1 ? versions.getFirst() : null;
-        }
-        var started = runs.stream().map(RunRow::startedAt).filter(Objects::nonNull)
-                .min(Comparator.naturalOrder()).orElse(null);
-        var finished = runs.stream().map(RunRow::finishedAt).filter(Objects::nonNull)
-                .max(Comparator.naturalOrder()).orElse(null);
-        var error = runs.stream().map(RunRow::error).filter(Objects::nonNull).findFirst().orElse(null);
-        return new Run("ai", version, status, started, finished, parsed, failed, error);
-    }
-
     Submissions submissions(UUID batchId) {
         repository.batch(batchId);
         var methods = methods(batchId);
-        var ai = aiEntries(batchId);
         var submissions = repository.submissions(batchId).stream().map(row -> {
             Map<String, SubmissionMethod> values = new LinkedHashMap<>();
             for (var method : methods) {
@@ -109,27 +72,9 @@ public class QueryService {
                             entry.stats() == null ? Map.of() : entry.stats(), entry.reason()));
                 }
             }
-            var entry = ai.get(row.id().toString());
-            if (entry != null) {
-                values.put("ai", aiMethod(entry));
-            }
             return new Submission(row.id(), row.name(), row.language(), row.loc(), values);
         }).toList();
         return new Submissions(submissions, submissions.size());
-    }
-
-    private SubmissionMethod aiMethod(AiEntry entry) {
-        var reason = unavailable(entry.run());
-        if (reason != null) {
-            return new SubmissionMethod("RUN_NOT_FINISHED".equals(reason.code()) ? "pending" : "failed",
-                    null, List.of(), Map.of(), reason);
-        }
-        var file = entry.file();
-        if (file == null) {
-            return new SubmissionMethod("failed", null, List.of(), Map.of(),
-                    new Reason("RUN_FAILED", "AI-прогон завершился без результата"));
-        }
-        return new SubmissionMethod(file.status(), file.score(), List.of(), Map.of(), file.reason());
     }
 
     byte[] source(UUID id) {
@@ -214,39 +159,21 @@ public class QueryService {
     }
 
     private List<MethodResult> methods(UUID batchId) {
-        return repository.runs(batchId).stream()
-                .filter(run -> !"ai".equals(run.method()))
-                .map(run -> {
-                    Map<String, CoreSubmission> submissions = new LinkedHashMap<>();
-                    Map<String, CorePair> pairs = new LinkedHashMap<>();
-                    var result = result(run);
-                    if (result != null) {
-                        result.submissions().forEach(s -> submissions.put(s.id(), s));
-                        result.pairs().forEach(p -> pairs.put(p.a() + ":" + p.b(), p));
-                    }
-                    return new MethodResult(run, submissions, pairs);
-                }).toList();
-    }
-
-    private Map<String, AiEntry> aiEntries(UUID batchId) {
-        Map<String, AiEntry> entries = new LinkedHashMap<>();
-        for (var run : repository.runs(batchId)) {
-            if (!"ai".equals(run.method())) continue;
-            var result = aiResult(run);
-            entries.put(run.submissionId().toString(),
-                    new AiEntry(run, result == null || result.files().isEmpty() ? null : result.files().getFirst()));
-        }
-        return entries;
+        return repository.runs(batchId).stream().map(run -> {
+            Map<String, CoreSubmission> submissions = new LinkedHashMap<>();
+            Map<String, CorePair> pairs = new LinkedHashMap<>();
+            var result = result(run);
+            if (result != null) {
+                result.submissions().forEach(s -> submissions.put(s.id(), s));
+                result.pairs().forEach(p -> pairs.put(p.a() + ":" + p.b(), p));
+            }
+            return new MethodResult(run, submissions, pairs);
+        }).toList();
     }
 
     private CoreResult result(RunRow run) {
         return "done".equals(run.status()) && run.result() != null
                 ? mapper.readValue(run.result(), CoreResult.class) : null;
-    }
-
-    private AiResult aiResult(RunRow run) {
-        return "done".equals(run.status()) && run.result() != null
-                ? mapper.readValue(run.result(), AiResult.class) : null;
     }
 
     private Reason unavailable(RunRow run) {

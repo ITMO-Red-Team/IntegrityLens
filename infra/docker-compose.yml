@@ -110,23 +110,6 @@ services:
       <<: *worker-env
       WORKER_METHOD: structsim
 
-  worker-ai:
-    <<: *worker
-    image: integritylens-worker-ai:0.1.1
-    build:
-      context: ..
-      dockerfile: worker/ai.Dockerfile
-      target: ai
-      args:
-        AICODE_MODEL_URL: ${AICODE_MODEL_URL:-https://github.com/ITMO-Red-Team/IntegrityLens/releases/download/aicode-model-v0.1.0/gigacheck-int2.zip}
-        AICODE_MODEL_SHA256: ${AICODE_MODEL_SHA256:-afd7277e650d08055c6deca54375dabc8423cdc289405b9c08343058a750c28c}
-    environment:
-      <<: *worker-env
-      WORKER_METHOD: ai
-      CORE_ENGINE: ${AICODE_ENGINE:-real}
-      CORE_TIMEOUT_SECONDS: ${AICODE_TIMEOUT_SECONDS:-1800}
-    mem_limit: 5g
-
   web:
     build: 
       context: ../web

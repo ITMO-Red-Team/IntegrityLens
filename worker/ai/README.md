@@ -1,46 +1,55 @@
-# Воркер AI
+# Движок AI
 
-Движок метода `ai` по контракту
-[`integritylens.ai/1`](../../docs/contracts.md#контракты-воркеров): получает
-задание, оценивает каждый файл работы отдельно и пишет `result.json` или
-ошибку файла. Под моделью — [aicode](../../tools/aicode/README.md) (GigaCheck,
-int2, CPU); воркер — общий из [`worker/`](../README.md), движок запускается
-отдельным процессом `python -m worker.ai run --input … --output …`.
+Модуль выполняет файловый контракт `integritylens.ai/1`: читает `job.json`,
+анализирует исходники и записывает `result.json`. Инференс использует
+[tools/aicode](../../tools/aicode/README.md), GigaCheck int2 на CPU.
 
-## Быстрый старт
+Постановка заданий, захват очереди, скачивание исходников и сохранение результата
+в PostgreSQL относятся к адаптеру новой системы. Этот модуль не изменяет API,
+схему БД и frontend. В общий Compose он пока не подключён.
 
-Стек с полным движком и запрос с архивом для образца:
+## Запуск
+
+Собрать образ из корня репозитория:
 
 ```sh
-docker compose -f infra/docker-compose.yml up --build -d
-curl -F archive=@docs/samples/works.zip -F language=java -F title=lab3 http://localhost:8080/api/batches
-docker compose -f infra/docker-compose.yml logs --tail 20 worker-ai
+docker build -f worker/ai.Dockerfile --target ai -t integritylens-worker-ai:0.1.1 .
 ```
 
-На каждую работу ставится свой прогон `ai`, воркер берёт их по одному. Замер
-на машине разработки (Docker Desktop, 20 vCPU, 6 работ по 1.2–1.6 КБ): все
-шесть AI-прогонов — за 2 мин 30 с (22–26 с на прогон вместе с загрузкой
-модели), память — 5 ГБ. Оценки шести работ — от 0.46 до 0.54.
+Подготовить рабочий каталог:
+
+```text
+work/
+  input/job.json
+  input/submissions/<submissionId>/source.java
+  output/
+```
+
+`inputFiles[].path` в задании — `input/submissions/<submissionId>/source.java`,
+относительно `work/`. `output/` должен быть доступен пользователю контейнера
+на запись. Образ содержит модель; при запуске она не скачивается.
+
+```sh
+docker run --rm --init --memory=5g -v "$PWD/work:/work" \
+  integritylens-worker-ai:0.1.1 run --input /work/input --output /work/output
+```
+
+Без Docker, с зависимостями aicode и fastjsonschema:
+
+```sh
+python -m worker.ai run --input work/input --output work/output
+```
+
+Коды выхода: 0 — результат записан (включая ошибки отдельных файлов),
+1 — сбой инструмента, 2 — неверный вход. Адаптер проверяет результат перед
+публикацией. Версия модели и фактические параметры находятся в результате.
 
 ## Оценки
 
-`score` работы — доля байтов, попавших в «подозрительные» фрагменты; каждый
-фрагмент — байтовое смещение с confidence. Порог по умолчанию — 0.05:
-инструментальный 0.8 на int2-кванте не пересекается ни одним confidence на
-реальном коде, то есть даёт пустые `suspicious`; 0.05 даёт сигнал, но шумный.
-HTTP API отдаёт статус и оценку, фрагменты — в `runs.result` и в MinIO
-(`runs/{runId}/attempt-{n}/result.json`).
-
-Ошибка отдельного файла не валят прогон: файл получает `status: failed` и
-`reason`, прогон завершается `done`.
-
-## Что внутри
-
-| | |
-|---|---|
-| [docs/scoring.md](docs/scoring.md) | задание и результат, как считаются оценки, порог, детерминизм |
-| [docs/runtime.md](docs/runtime.md) | ресурсы и время, сборка образа, мок-движок |
-| [aicode](../../tools/aicode/README.md) | сама модель: устройство, ограничения, качество |
+`score` — доля байтов в подозрительных фрагментах; фрагменты содержат смещения
+UTF-8 и confidence. Порог по умолчанию 0.05 даёт шумный сигнал на int2-модели;
+это не доказательство происхождения кода. Подробности:
+[расчёт оценок](docs/scoring.md), [ресурсы](docs/runtime.md).
 
 ## Проверка без модели
 

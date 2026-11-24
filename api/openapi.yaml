@@ -664,7 +664,6 @@ components:
           enum:
           - jplag
           - structsim
-          - ai
         methodVersion:
           type:
           - string

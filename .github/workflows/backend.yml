@@ -32,21 +32,17 @@ jobs:
       - run: cargo build --release --locked --manifest-path tools/structsim/native/Cargo.toml
       - run: python -m pytest tools/structsim/tests -c tools/structsim/pyproject.toml
       - run: docker compose -p integritylens-ci -f infra/docker-compose.yml up --build -d --wait --wait-timeout 180
-        env:
-          AICODE_ENGINE: mock
       - run: python infra/smoke_test.py
       - run: python infra/export_openapi.py --check
       - run: |
-          docker compose -p integritylens-ci -f infra/docker-compose.yml stop worker-jplag worker-structsim worker-ai
+          docker compose -p integritylens-ci -f infra/docker-compose.yml stop worker-jplag worker-structsim
           docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-jplag \
             python -m unittest discover -s worker/tests -v
           docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-jplag \
             python -m unittest discover -s worker/core/tests -v
           docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-structsim \
             python -m unittest discover -s worker/core/tests -v
-          docker compose -p integritylens-ci -f infra/docker-compose.yml run --rm --no-deps worker-ai \
-            python -m unittest discover -s worker/tests -v
       - if: failure()
-        run: docker compose -p integritylens-ci -f infra/docker-compose.yml logs --tail 100 api worker-jplag worker-structsim worker-ai
+        run: docker compose -p integritylens-ci -f infra/docker-compose.yml logs --tail 100 api worker-jplag worker-structsim
       - if: always()
         run: docker compose -p integritylens-ci -f infra/docker-compose.yml down -v

@@ -5,8 +5,6 @@ type S = components["schemas"];
 export type Batch = S["Batch"];
 export type Run = S["Run"];
 export type Method = Run["method"];
-/** Методы, оценивающие пары работ. `ai` оценивает отдельную работу и в пары не входит. */
-export type ComparisonMethod = Exclude<Method, "ai">;
 export type BatchStatus = Batch["status"];
 export type Submission = S["Submission"];
 export type SubmissionInfo = S["SubmissionInfo"];

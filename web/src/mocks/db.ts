@@ -1,9 +1,9 @@
 import type {
   Batch,
-  ComparisonMethod,
   Decision,
   Feedback,
   Fragment,
+  Method,
   PairDetail,
   PairScore,
   PairSummary,
@@ -15,9 +15,7 @@ import { COURSE_TEMPLATE, DEMO_CORPUS, type CorpusItem } from "./corpus";
 import { analyze, prepare } from "./engine";
 
 export const DEMO_BATCH_ID = "00000000-0000-4000-8000-000000000001";
-const METHODS: ComparisonMethod[] = ["jplag", "structsim"];
-// AI считается дольше сравнения: в демо-режиме он заканчивается последним.
-const AI_LONGER = 20;
+const METHODS: Method[] = ["jplag", "structsim"];
 const NOT_FINISHED: Reason = { code: "RUN_NOT_FINISHED", message: "Анализ ещё не завершён" };
 
 interface StoredSubmission {
@@ -33,11 +31,9 @@ interface StoredBatch {
   language: string;
   createdAt: string;
   submissions: StoredSubmission[];
-  scores: Map<string, Record<ComparisonMethod, number>>;
+  scores: Map<string, Record<Method, number>>;
   fragments: Map<string, Fragment[]>;
-  aiScores: Map<string, number>;
-  doneAt: Record<ComparisonMethod, number>;
-  aiDoneAt: number;
+  doneAt: Record<Method, number>;
   startedAt: number;
 }
 
@@ -53,13 +49,6 @@ function uuid(demo: boolean) {
 
 const round4 = (x: number) => Math.round(x * 10000) / 10000;
 
-// Оценка AI для мока детерминирована работой: 0.05–0.95 из её содержимого.
-const aiScore = (code: string) => {
-  let h = 0;
-  for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) >>> 0;
-  return round4(((h % 901) + 50) / 1000);
-};
-
 export interface NewItem {
   originalName: string;
   code: string;
@@ -71,13 +60,12 @@ export function createBatch(
   processingMs = 0,
   fixedId?: string,
   language: string = "java",
-  aiProcessingMs = processingMs * AI_LONGER,
 ): Batch {
   const demo = !!fixedId;
   const id = fixedId ?? uuid(false);
   const sorted = [...items].sort((x, y) => x.originalName.localeCompare(y.originalName));
   const prepared = sorted.map((it) => ({ ...it, id: uuid(demo), p: prepare(it.code, COURSE_TEMPLATE) }));
-  const scores = new Map<string, Record<ComparisonMethod, number>>();
+  const scores = new Map<string, Record<Method, number>>();
   const fragments = new Map<string, Fragment[]>();
   for (let i = 0; i < prepared.length; i++)
     for (let j = i + 1; j < prepared.length; j++) {
@@ -105,42 +93,35 @@ export function createBatch(
     submissions: prepared.map((s) => ({ id: s.id, originalName: s.originalName, loc: s.code.split("\n").length, code: s.code })),
     scores,
     fragments,
-    aiScores: new Map(prepared.map((s) => [s.id, aiScore(s.code)])),
     doneAt: { jplag: now + processingMs * 0.6, structsim: now + processingMs },
-    aiDoneAt: now + aiProcessingMs,
     startedAt: now + Math.min(300, processingMs * 0.1),
   });
   return getBatch(id)!;
 }
 
-function statusAt(startedAt: number, doneAt: number): Run["status"] {
+function runStatus(b: StoredBatch, m: Method): Run["status"] {
   const now = Date.now();
-  if (now >= doneAt) return "done";
-  return now >= startedAt ? "running" : "queued";
-}
-
-function summary(method: Run["method"], status: Run["status"], startedAt: number, finishedAt: number, version: string, size: number): Run {
-  const done = status === "done";
-  return {
-    method,
-    methodVersion: done ? version : null,
-    status,
-    startedAt: status === "queued" ? null : new Date(startedAt).toISOString(),
-    finishedAt: done ? new Date(finishedAt).toISOString() : null,
-    parsed: done ? size : null,
-    failed: done ? 0 : null,
-    error: null,
-  };
+  if (now >= b.doneAt[m]) return "done";
+  return now >= b.startedAt ? "running" : "queued";
 }
 
 export function getBatch(id: string): Batch | undefined {
   const b = batches.get(id);
   if (!b) return undefined;
-  const size = b.submissions.length;
-  const runs: Run[] = [
-    ...METHODS.map((m) => summary(m, statusAt(b.startedAt, b.doneAt[m]), b.startedAt, b.doneAt[m], "mock-web", size)),
-    summary("ai", statusAt(b.startedAt, b.aiDoneAt), b.startedAt, b.aiDoneAt, "mock-web-ai", size),
-  ];
+  const runs: Run[] = METHODS.map((m) => {
+    const status = runStatus(b, m);
+    const done = status === "done";
+    return {
+      method: m,
+      methodVersion: done ? "mock-web" : null,
+      status,
+      startedAt: status === "queued" ? null : new Date(b.startedAt).toISOString(),
+      finishedAt: done ? new Date(b.doneAt[m]).toISOString() : null,
+      parsed: done ? b.submissions.length : null,
+      failed: done ? 0 : null,
+      error: null,
+    };
+  });
   const st = runs.map((r) => r.status);
   const status: Batch["status"] = st.every((s) => s === "queued")
     ? "queued"
@@ -156,8 +137,8 @@ export function getBatch(id: string): Batch | undefined {
 export const listBatches = () =>
   [...batches.values()].sort((x, y) => y.createdAt.localeCompare(x.createdAt)).map((b) => getBatch(b.id)!);
 
-function pairScore(b: StoredBatch, m: ComparisonMethod, key: string): PairScore {
-  if (statusAt(b.startedAt, b.doneAt[m]) !== "done") return { value: null, details: {}, fragments: [], reason: NOT_FINISHED };
+function pairScore(b: StoredBatch, m: Method, key: string): PairScore {
+  if (runStatus(b, m) !== "done") return { value: null, details: {}, fragments: [], reason: NOT_FINISHED };
   return {
     value: b.scores.get(key)?.[m] ?? null,
     details: {},
@@ -172,7 +153,7 @@ export function listSubmissions(batchId: string): Submission[] | undefined {
   return b.submissions.map((s) => {
     const methods: Submission["methods"] = {};
     for (const m of METHODS) {
-      if (statusAt(b.startedAt, b.doneAt[m]) !== "done") {
+      if (runStatus(b, m) !== "done") {
         methods[m] = { status: "pending", score: null, matches: [], stats: {}, reason: NOT_FINISHED };
         continue;
       }
@@ -183,10 +164,6 @@ export function listSubmissions(batchId: string): Submission[] | undefined {
         .slice(0, 3);
       methods[m] = { status: "ok", score: matches[0]?.score ?? null, matches, stats: {}, reason: null };
     }
-    methods.ai =
-      statusAt(b.startedAt, b.aiDoneAt) === "done"
-        ? { status: "ok", score: b.aiScores.get(s.id)!, matches: [], stats: {}, reason: null }
-        : { status: "pending", score: null, matches: [], stats: {}, reason: NOT_FINISHED };
     return { id: s.id, originalName: s.originalName, language: b.language, loc: s.loc, methods };
   });
 }

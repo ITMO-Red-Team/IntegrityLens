@@ -1,4 +1,4 @@
-# Воркер метода ai: очередь из worker/ и движок из tools/aicode в одном образе.
+# Движок ai по файловому контракту: очередь подключается внешним адаптером.
 # Модель скачивается при сборке из релиза репозитория (sha256 проверяется) и лежит
 # отдельным stage: код воркера меняется часто, модель — нет.
 FROM python:3.11-slim AS model
@@ -9,7 +9,7 @@ RUN python /tmp/fetch_model.py --url "$AICODE_MODEL_URL" --sha256 "$AICODE_MODEL
         --output /opt/aicode-model \
     && rm /tmp/fetch_model.py
 
-# Общая часть: зависимости aicode и очереди. Сборка заканчивается проверкой
+# Общая часть: зависимости aicode и проверки контракта. Сборка заканчивается проверкой
 # контракта на известном ответе — без модели, поэтому работает везде.
 FROM python:3.11-slim AS ai-base
 
@@ -30,8 +30,7 @@ RUN pip install --no-cache-dir uv==0.8.15 \
     && uv pip install --python .venv/bin/python --no-deps \
        "git+https://github.com/ai-forever/gigacheck.git@8cdbe6a1ce628b49b4aa0794edf7a425a47a774c"
 
-COPY worker/requirements.txt worker/requirements.txt
-RUN uv pip install --python .venv/bin/python -r worker/requirements.txt
+RUN uv pip install --python .venv/bin/python fastjsonschema==2.22.2
 
 COPY tools/aicode/src ./src
 COPY worker worker
@@ -57,4 +56,5 @@ RUN chmod -R a+rwX /app/.venv/lib/python3.11/site-packages/optimum/quanto/librar
 RUN mkdir -p /home/app && chown -R app:app /home/app
 
 USER app
-CMD ["python", "-m", "worker"]
+ENTRYPOINT ["python", "-m", "worker.ai"]
+CMD ["--help"]

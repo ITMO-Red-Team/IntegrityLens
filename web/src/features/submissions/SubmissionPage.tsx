@@ -10,6 +10,7 @@ import type {
   SimilarWork,
   SuspiciousRange,
 } from "../../api/target/types";
+import { anonymousSubmissionLabel } from "../../lib/labels";
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError
@@ -176,7 +177,7 @@ function SimilarWorks({
         </p>
       ) : (
         <div>
-          {items.map((item, index) => (
+          {items.map((item) => (
             <Link
               key={`${item.assignmentId}-${item.submissionId}`}
               to={
@@ -185,12 +186,14 @@ function SimilarWorks({
               }
               className="flex items-center gap-3 border-b border-line p-4 last:border-0 hover:bg-sunk"
             >
-              <span className="font-mono font-semibold text-accent">
-                {`A-${String(index + 1).padStart(2, "0")}`}
-              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block wrap-anywhere font-mono text-xs font-semibold text-accent">
+                  {anonymousSubmissionLabel(item.submissionId)}
+                </span>
 
-              <span className="min-w-0 flex-1 text-sm">
-                {item.assignmentTitle}
+                <span className="block text-sm">
+                  {item.assignmentTitle}
+                </span>
               </span>
 
               <span className="font-mono font-semibold">

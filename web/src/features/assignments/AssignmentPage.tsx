@@ -25,6 +25,7 @@ import {
   ApiError,
   type SubmissionSort,
 } from "../../api/target/client";
+import { anonymousSubmissionLabel } from "../../lib/labels";
 
 const PAGE_SIZE = 20;
 
@@ -907,8 +908,9 @@ export function AssignmentPage() {
                           index +
                           1;
 
-                        const label =
-                          `A-${String(number).padStart(2, "0")}`;
+                        const label = anonymousSubmissionLabel(
+                          item.submissionId,
+                        );
 
                         return (
                           <tr
@@ -925,7 +927,7 @@ export function AssignmentPage() {
                                   `/assignments/${assignmentId}` +
                                   `/submissions/${item.submissionId}`
                                 }
-                                className="font-mono font-semibold text-accent hover:underline"
+                                className="wrap-anywhere font-mono font-semibold text-accent hover:underline"
                                 aria-label={`Открыть работу ${label}`}
                               >
                                 {label}
@@ -960,6 +962,7 @@ export function AssignmentPage() {
                               <button
                                 type="button"
                                 className="text-accent hover:underline"
+                                aria-label={`Сбросить попытку ${label}`}
                                 onClick={() => {
                                   resetAttempt.reset();
                                   setNotice("");
@@ -972,7 +975,7 @@ export function AssignmentPage() {
                                   });
                                 }}
                               >
-                                Сбросить попытку {label}
+                                Сбросить попытку
                               </button>
                             </td>
                           </tr>

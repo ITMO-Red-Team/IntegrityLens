@@ -41,13 +41,12 @@ describe("Навигация к работе студента", () => {
       ),
     );
 
-    const submission =
-      mockSubmissions[MOCK_IDS.success]
-        ?.items[0];
+    const [submission, similarSubmission] =
+      mockSubmissions[MOCK_IDS.success]?.items ?? [];
 
-    if (!submission) {
+    if (!submission || !similarSubmission) {
       throw new Error(
-        "Отсутствует тестовая работа",
+        "Для теста нужны две работы",
       );
     }
 
@@ -66,7 +65,7 @@ describe("Навигация к работе студента", () => {
     const workLink = within(table).getByRole(
       "link",
       {
-        name: "Открыть работу A-01",
+        name: `Открыть работу A-${submission.submissionId}`,
       },
     );
 
@@ -75,13 +74,18 @@ describe("Навигация к работе студента", () => {
       `/assignments/${MOCK_IDS.success}/submissions/${submission.submissionId}`,
     );
 
+    const similarWorkLabel = `A-${similarSubmission.submissionId}`;
+    expect(within(table).getByRole("link", {
+      name: `Открыть работу ${similarWorkLabel}`,
+    })).toHaveTextContent(similarWorkLabel);
+
     await user.click(workLink);
 
-    expect(
-      await screen.findByRole("heading", {
-        name: "Похожие работы",
-      }),
-    ).toBeInTheDocument();
+    const similarLink = await screen.findByRole("link", {
+      name: /Успешная проверка/,
+    });
+
+    expect(similarLink).toHaveTextContent(similarWorkLabel);
 
     expect(
       screen.getByRole("heading", {

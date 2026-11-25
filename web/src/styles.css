@@ -17,6 +17,8 @@
   --c-f1: #e2b13c; --c-f1-bg: #3a3017; --c-f2: #7ea8ff; --c-f2-bg: #1b2a47;
   --c-f3: #58c192; --c-f3-bg: #173329; --c-f4: #d58ae3; --c-f4-bg: #352039;
   --c-tmpl: #1c232d;
+  --c-structsim-match: var(--c-f1-bg); --c-structsim-match-hover: #53431d;
+  --c-structsim-match-selected: #6c5722; --c-structsim-line-number: #d1d9e3;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -27,6 +29,8 @@
     --c-f1: #e2b13c; --c-f1-bg: #3a3017; --c-f2: #7ea8ff; --c-f2-bg: #1b2a47;
     --c-f3: #58c192; --c-f3-bg: #173329; --c-f4: #d58ae3; --c-f4-bg: #352039;
     --c-tmpl: #1c232d;
+    --c-structsim-match: var(--c-f1-bg); --c-structsim-match-hover: #53431d;
+    --c-structsim-match-selected: #6c5722; --c-structsim-line-number: #d1d9e3;
     color-scheme: dark;
   }
 }
@@ -86,6 +90,21 @@
   .hljs-operator, .hljs-punctuation { color: var(--c-muted); }
   .hljs-emphasis { font-style: italic; }
   .hljs-strong { font-weight: 600; }
+
+  .structsim-match {
+    background-color: var(--c-structsim-match, var(--color-amber-100));
+  }
+  .structsim-match[aria-pressed="true"] {
+    background-color: var(--c-structsim-match-selected, var(--color-amber-300));
+  }
+  @media (hover: hover) {
+    .structsim-match:hover {
+      background-color: var(--c-structsim-match-hover, var(--color-amber-200));
+    }
+  }
+  .structsim-line-number {
+    color: var(--c-structsim-line-number, var(--c-muted));
+  }
 
   /* Подозрительные/схожие участки кода.
      Обводка рисуется только по внешним границам региона: строки, следующие

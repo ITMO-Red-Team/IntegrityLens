@@ -194,17 +194,14 @@ function CodePane({
                     fragmentIndex === selectedFragment,
                 );
 
-              const background = isSelected
-                ? "bg-amber-300"
-                : isMatching
-                  ? "bg-amber-100"
-                  : "";
-
               const content = (
                 <>
                   <span
                     aria-hidden="true"
-                    className="mr-4 inline-block w-12 shrink-0 select-none border-r border-line pr-3 text-right text-muted"
+                    className={
+                      `mr-4 inline-block w-12 shrink-0 select-none border-r border-line pr-3 text-right ` +
+                      (isMatching ? "structsim-line-number" : "text-muted")
+                    }
                   >
                     {lineNumber}
                   </span>
@@ -246,11 +243,9 @@ function CodePane({
                   }
                   title="Перейти к соответствующему фрагменту"
                   className={
-                    `flex min-w-max w-full cursor-pointer ` +
+                    `structsim-match flex min-w-max w-full cursor-pointer ` +
                     `text-left font-mono text-xs leading-6 ` +
-                    `hover:bg-amber-200 focus-visible:outline ` +
-                    `focus-visible:outline-2 focus-visible:outline-accent ` +
-                    background
+                    `focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent`
                   }
                   onClick={() => {
                     if (firstMatch !== undefined) {

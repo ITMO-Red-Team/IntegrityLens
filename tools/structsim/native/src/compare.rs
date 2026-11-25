@@ -1,4 +1,4 @@
-//! Шаг 3: три меры и `COMBINED`, бит в бит как в `compare.py`.
+//! Шаг 3: четыре меры, `COMBINED` и итог, бит в бит как в `compare.py`.
 //!
 //! Из `compare.combined` считается только то, что не посчитано раньше. Там мера
 //! по функциям вычисляется дважды, хотя в обе стороны даёт одно число, а мера по
@@ -63,7 +63,7 @@ fn shingles(labels: &[u32]) -> Vec<u64> {
     keys
 }
 
-fn shingle_similarity(a: &[u64], b: &[u64]) -> f64 {
+fn common_shingles(a: &[u64], b: &[u64]) -> usize {
     let (mut x, mut y, mut common) = (0, 0, 0usize);
     while x < a.len() && y < b.len() {
         match a[x].cmp(&b[y]) {
@@ -76,11 +76,23 @@ fn shingle_similarity(a: &[u64], b: &[u64]) -> f64 {
             }
         }
     }
+    common
+}
+
+fn shingle_similarity(a: &[u64], b: &[u64], common: usize) -> f64 {
     let union = a.len() + b.len() - common;
     if union == 0 {
         return 0.0;
     }
     common as f64 / union as f64
+}
+
+fn containment_similarity(a: &[u64], b: &[u64], common: usize) -> f64 {
+    let smaller = a.len().min(b.len());
+    if smaller == 0 {
+        return 0.0;
+    }
+    common as f64 / smaller as f64
 }
 
 /// Встроенный `sum()` для float в CPython ≥ 3.12: компенсация Ноймайера. Обычное
@@ -191,15 +203,20 @@ pub struct PairScore {
     pub shingle: f64,
     pub blocks: f64,
     pub combined: f64,
+    pub containment: f64,
+    pub final_score: f64,
     pub tiles: Vec<TileLines>,
 }
 
 pub fn score_pair(a: &Program, b: &Program, table: &BlockTable, min_tile: usize, worker: &mut Worker) -> PairScore {
     let order = order_similarity(&a.labels, &b.labels, &mut worker.scratch);
     let reversed = order_similarity(&b.labels, &a.labels, &mut worker.scratch);
-    let shingle = shingle_similarity(&a.shingles, &b.shingles);
+    let common = common_shingles(&a.shingles, &b.shingles);
+    let shingle = shingle_similarity(&a.shingles, &b.shingles, common);
+    let containment = containment_similarity(&a.shingles, &b.shingles, common);
     let blocks = block_similarity(a, b, table, worker);
     let combined = ((order + shingle + blocks) / 3.0 + (reversed + shingle + blocks) / 3.0) / 2.0;
+    let final_score = if containment > combined { containment } else { combined };
     let tiles = if min_tile == 0 {
         Vec::new()
     } else {
@@ -212,7 +229,7 @@ pub fn score_pair(a: &Program, b: &Program, table: &BlockTable, min_tile: usize,
             })
             .collect()
     };
-    PairScore { order, shingle, blocks, combined, tiles }
+    PairScore { order, shingle, blocks, combined, containment, final_score, tiles }
 }
 
 #[cfg(test)]
@@ -232,13 +249,23 @@ mod tests {
     #[test]
     fn short_programs_have_no_shingles() {
         assert_eq!(shingles(&[1, 2, 3, 4]), Vec::<u64>::new());
-        assert_eq!(shingle_similarity(&[], &[]), 0.0);
+        assert_eq!(shingle_similarity(&[], &[], 0), 0.0);
+        assert_eq!(containment_similarity(&[], &[1], 0), 0.0);
     }
 
     #[test]
     fn shingle_similarity_is_jaccard() {
         let (a, b) = (shingles(&[1, 2, 3, 4, 5, 6]), shingles(&[2, 3, 4, 5, 6, 7]));
         assert_eq!(a.len(), 2);
-        assert_eq!(shingle_similarity(&a, &b), 1.0 / 3.0);
+        assert_eq!(shingle_similarity(&a, &b, common_shingles(&a, &b)), 1.0 / 3.0);
+    }
+
+    #[test]
+    fn containment_divides_by_smaller_set() {
+        let (a, b) = (shingles(&[1, 2, 3, 4, 5, 6]), shingles(&[9, 8, 1, 2, 3, 4, 5, 6, 7, 8, 9]));
+        let common = common_shingles(&a, &b);
+        assert_eq!(containment_similarity(&a, &b, common), 1.0);
+        assert_eq!(containment_similarity(&b, &a, common), 1.0);
+        assert!(shingle_similarity(&a, &b, common) < 0.5);
     }
 }

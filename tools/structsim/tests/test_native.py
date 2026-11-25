@@ -90,6 +90,8 @@ def _assert_same(programs: list[Program], min_tile: int, threads: int = 2) -> No
             "shingle": pair.shingle,
             "blocks": pair.blocks,
             "combined": pair.combined,
+            "containment": pair.containment,
+            "final": pair.final,
         }
         expected = tiles.tiles_of(first, second, min_tile)
         assert [item.tile for item in pair.tiles] == expected

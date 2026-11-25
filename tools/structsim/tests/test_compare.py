@@ -1,7 +1,9 @@
 from structsim.compare import (
     block_similarity,
     combined,
+    containment_similarity,
     explain,
+    final_score,
     order_similarity,
     shingle_similarity,
     shingles,
@@ -147,4 +149,47 @@ def test_explain_reports_every_measure():
         "shingle": 1.0,
         "blocks": 1.0,
         "combined": 1.0,
+        "containment": 1.0,
+        "final": 1.0,
     }
+
+
+def test_containment_of_program_inside_template_is_one():
+    solution = tuple("ABCDEFGH")
+    template = tuple("pqrstuvwxyz") + solution + tuple("PQRSTUVWXYZ")
+    assert containment_similarity(solution, template) == 1.0
+    assert shingle_similarity(solution, template) < 0.25
+
+
+def test_containment_divides_by_smaller_set_of_windows():
+    a = tuple("ABCDEFGH")
+    b = tuple("CDEFGHX")
+    assert len(shingles(a)) == 4 and len(shingles(b)) == 3
+    assert containment_similarity(a, b) == 2 / 3
+
+
+def test_containment_is_symmetric():
+    a, b = tuple("ABCDEFGHIJ"), tuple("XYABCDEFZ")
+    assert containment_similarity(a, b) == containment_similarity(b, a)
+
+
+def test_containment_too_short_is_zero():
+    assert containment_similarity(tuple("ABCD"), tuple("ABCDEFG")) == 0.0
+    assert containment_similarity((), ()) == 0.0
+
+
+def test_final_is_max_of_combined_and_containment():
+    solution = tuple("ABCDEFGH")
+    template = tuple("pqrstuvwxyz") + solution + tuple("PQRSTUVWXYZ")
+    a = prog(solution, [Block(solution)])
+    b = prog(template, [Block(template)])
+    assert combined(a, b) < 1.0
+    assert final_score(a, b) == 1.0
+    assert final_score(a, b) == explain(a, b)["final"]
+
+
+def test_final_never_below_combined():
+    a = prog("ABCDEFGHIJ", [Block(tuple("ABCDE")), Block(tuple("FGHIJ"))])
+    b = prog("FGHIJKLMNOPQR", [Block(tuple("FGHIJ"))])
+    assert final_score(a, b) >= combined(a, b)
+    assert final_score(a, b) == final_score(b, a)

@@ -23,17 +23,19 @@ def _write_csv(report: pipeline.Report, path: Path) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(
-            ["a", "b", "combined", "order", "shingle", "blocks", "contrast_z"]
+            ["a", "b", "final", "combined", "order", "shingle", "blocks", "containment", "contrast_z"]
         )
-        for score in sorted(report.scores, key=lambda s: -s.combined):
+        for score in sorted(report.scores, key=lambda s: -s.final):
             writer.writerow(
                 [
                     score.a,
                     score.b,
+                    f"{score.final:.6f}",
                     f"{score.combined:.6f}",
                     f"{score.order:.6f}",
                     f"{score.shingle:.6f}",
                     f"{score.blocks:.6f}",
+                    f"{score.containment:.6f}",
                     "" if score.contrast_z is None else f"{score.contrast_z:.6f}",
                 ]
             )

@@ -29,22 +29,25 @@ uv sync
 uv run structsim <директория с решениями одной задачи>
 ```
 
-Вывод — пары, самые похожие сначала:
+Вывод — пары по убыванию итога:
 
 ```
-разобрано программ: 5, пар: 10, пропущено файлов: 1
+разобрано программ: 6, пар: 15, пропущено файлов: 0
 
-пара                              COMBINED   поряд   фрагм   функц  contrast-z
-a_py.py ↔ c_translated.go            1.000    1.00    1.00    1.00        1.53
-a_py.py ↔ b_cpp.cpp                  0.919    0.96    0.83    0.96        1.15
-a_py.py ↔ e_while.java               0.644    0.80    0.33    0.80       -0.11
-a_py.py ↔ d_other.py                 0.429    0.60    0.09    0.60       -0.93
+пара                                       итог  COMBINED   поряд   фрагм   функц   включ  contrast-z
+student_01.java ↔ student_02.java         1.000     1.000    1.00    1.00    1.00    1.00        2.83
+student_03.java ↔ student_06.java         0.784     0.631    0.55    0.48    0.86    0.78       -0.00
+student_01.java ↔ student_06.java         0.757     0.757    0.88    0.51    0.88    0.76        0.64
+student_02.java ↔ student_06.java         0.757     0.757    0.88    0.51    0.88    0.76        0.64
+student_01.java ↔ student_03.java         0.692     0.618    0.50    0.47    0.88    0.69       -0.41
+student_02.java ↔ student_03.java         0.692     0.618    0.50    0.47    0.88    0.69       -0.41
 ```
 
-Здесь `a_py.py` и `c_translated.go` — один алгоритм на Python и на Go, и
-оценка 1.000: после очистки их последовательности совпадают буква в букву.
-`b_cpp.cpp` тот же алгоритм на C++, но с лишним параметром. `e_while.java`
-решает ту же задачу через `while`, `d_other.py` — другую задачу.
+Это шесть работ из [`docs/samples/students`](../../docs/samples/students), сохранённые
+под именами студентов. `student_01` и `student_02` после очистки совпадают, поэтому
+итог 1.000. У пары `student_03 ↔ student_06` итог 0.784 выше `COMBINED` 0.631: в
+большей программе нашлись 78 % кусков меньшей, а три меры `COMBINED` делят совпадение
+на обе программы. Итог равен большему из `COMBINED` и включения.
 
 Какие именно куски совпали — отдельной командой, **с диапазонами строк**:
 
@@ -74,9 +77,9 @@ uv run structsim <директория> --tiles a_py.py c_translated.go
 
 | | Шаг | Что делает | Где |
 |---|---|---|---|
-| 1 | общее дерево | `semgrep-core` разбирает файл в дерево, одинаковое для разных языков | [`semgrep.py`](src/structsim/semgrep.py) |
+| 1 | общее дерево | `semgrep-core` разбирает файл в дерево, одинаковое для разных языков; Java разбирает tree-sitter в процессе | [`semgrep.py`](src/structsim/semgrep.py), [`treesitter.py`](src/structsim/treesitter.py) |
 | 2 | очистка | дерево → последовательность меток, без имён, типов и значений | [`labels.py`](src/structsim/labels.py) |
-| 3 | сравнение пары | три меры, итог `COMBINED` | [`compare.py`](src/structsim/compare.py) |
+| 3 | сравнение пары | четыре меры, `COMBINED` и итог пары | [`compare.py`](src/structsim/compare.py) |
 | 4 | сравнение с фоном | `contrast-z` по набору решений одной задачи | [`contrast.py`](src/structsim/contrast.py) |
 
 Плюс отдельный вывод: **тайлы** — какие куски двух программ совпали
@@ -94,7 +97,7 @@ uv run structsim <директория> --tiles a_py.py c_translated.go
 | | |
 |---|---|
 | [docs/pipeline.md](docs/pipeline.md) | конвейер: границы, типы, три меры, тайлы, что осталось |
-| [docs/step1.md](docs/step1.md) | шаг 1: `semgrep-core` и позиции токенов, языки, запуск образа, что может пойти не так |
+| [docs/step1.md](docs/step1.md) | шаг 1: `semgrep-core` и позиции токенов, языки, Java без Semgrep, запуск образа, что может пойти не так |
 | [docs/step2.md](docs/step2.md) | шаг 2: таблица «узел → метки», почему порядок инфиксный, блоки, позиции |
 | [docs/native.md](docs/native.md) | шаг 3 и тайлы на Rust: почему числа те же, откуда скорость, асимптотика, формат |
 
@@ -115,7 +118,7 @@ Python.
 ```
 tools/structsim/
   README.md
-  pyproject.toml            — uv-проект, ядро без зависимостей
+  pyproject.toml            — uv-проект, ядро без обязательных зависимостей
   docker/
     semgrep.Dockerfile      — образ для шага 1
   docs/                     — конвейер и шаг 1
@@ -123,7 +126,8 @@ tools/structsim/
   src/structsim/
     semgrep.py              — шаг 1: файл → дерево
     labels.py               — шаг 2: дерево → метки и блоки
-    compare.py              — шаг 3: три меры и COMBINED
+    treesitter.py           — шаги 1 и 2 для Java через tree-sitter
+    compare.py              — шаг 3: четыре меры, COMBINED и итог
     contrast.py             — шаг 4: contrast-z
     tiles.py                — общие куски (GST)
     model.py                — Program, Block, Tile, Span

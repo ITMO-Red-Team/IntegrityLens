@@ -60,6 +60,16 @@ def shingle_similarity(
     return len(sa & sb) / len(union)
 
 
+def containment_similarity(
+    a: tuple[str, ...], b: tuple[str, ...], size: int = SHINGLE_SIZE
+) -> float:
+    sa, sb = shingles(a, size), shingles(b, size)
+    smaller = min(len(sa), len(sb))
+    if smaller == 0:
+        return 0.0
+    return len(sa & sb) / smaller
+
+
 def _best_match(block: tuple[str, ...], others: tuple[tuple[str, ...], ...]) -> float:
     return max((order_similarity(block, other) for other in others), default=0.0)
 
@@ -101,15 +111,23 @@ def combined(a: Program, b: Program) -> float:
     return (_combined_one_way(a, b) + _combined_one_way(b, a)) / 2
 
 
+def final_score(a: Program, b: Program) -> float:
+    return max(combined(a, b), containment_similarity(a.labels, b.labels))
+
+
 def explain(a: Program, b: Program) -> dict[str, float]:
-    """Все три меры и `COMBINED` разом — чтобы было видно, что откуда взялось.
+    """Все меры, `COMBINED` и итог разом — чтобы было видно, что откуда взялось.
 
     Меры 1 и 2 приводятся в одну сторону, как в разборе метода; `COMBINED`
     усреднён по обеим.
     """
+    both = combined(a, b)
+    contained = containment_similarity(a.labels, b.labels)
     return {
         "order": order_similarity(a.labels, b.labels),
         "shingle": shingle_similarity(a.labels, b.labels),
         "blocks": block_similarity(a, b),
-        "combined": combined(a, b),
+        "combined": both,
+        "containment": contained,
+        "final": max(both, contained),
     }

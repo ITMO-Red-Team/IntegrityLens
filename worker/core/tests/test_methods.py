@@ -230,8 +230,11 @@ class StructsimTest(MethodCase):
     def test_scores_fragments_and_reproducibility(self):
         result = self.common_checks()
         pair = self.pair(result, "base", "renamed")
-        self.assertEqual({key: pair["details"][key] for key in ("order", "shingle", "blocks")},
-                         {"order": 1.0, "shingle": 1.0, "blocks": 1.0})
+        self.assertEqual({key: pair["details"][key] for key in ("order", "shingle", "blocks", "combined", "containment")},
+                         {"order": 1.0, "shingle": 1.0, "blocks": 1.0, "combined": 1.0, "containment": 1.0})
+        for pair in result["pairs"]:
+            if pair["value"] is not None:
+                self.assertEqual(pair["value"], max(pair["details"]["combined"], pair["details"]["containment"]))
         self.assertEqual(self.status(result, "base")["stats"]["labels"], selfcheck.BASE_LABELS)
 
     def test_templates_do_not_count(self):
@@ -300,11 +303,18 @@ class StructsimTest(MethodCase):
                 self.execute()
 
     def test_broken_tool_is_retryable(self):
-        self.add("base", "renamed", "other", "partial", "tiny")
+        self.add("base", "renamed", "other", "partial", "tiny", "broken")
         self.assertEqual(self.cli_exit_code(SEMGREP_CORE="/nonexistent"), 1)
 
-    def test_killed_tool_is_retryable_not_a_parse_failure(self):
+    def test_valid_java_does_not_need_semgrep(self):
         self.add("base", "renamed", "other", "partial", "tiny")
+        expected = self.execute()
+        self.assertEqual(self.cli_exit_code(SEMGREP_CORE="/nonexistent"), 0)
+        result = json.loads((self.root / "cli" / "result.json").read_text(encoding="utf-8"))
+        self.assertEqual(result["pairs"], expected["pairs"])
+
+    def test_killed_tool_is_retryable_not_a_parse_failure(self):
+        self.add("base", "renamed", "other", "partial", "tiny", "broken")
         killed = self.root / "killed"
         killed.write_text("#!/bin/sh\nkill -9 $$\n")
         killed.chmod(0o755)

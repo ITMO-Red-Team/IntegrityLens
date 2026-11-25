@@ -17,8 +17,8 @@ use std::time::Instant;
 use compare::{score_pair, BlockTable, PairScore, Program, Worker, MAX_ALPHABET};
 use matcher::Seq;
 
-const PROTOCOL: &str = "structsim-native/1";
-const SCOPED_PROTOCOL: &str = "structsim-native/2";
+const PROTOCOL: &str = "structsim-native/3";
+const SCOPED_PROTOCOL: &str = "structsim-native/4";
 
 struct Numbers<'a> {
     tokens: std::str::SplitAsciiWhitespace<'a>,
@@ -155,11 +155,13 @@ fn build(input: Input, threads: usize) -> (Vec<Program>, BlockTable) {
 fn write_pair(out: &mut impl Write, a: usize, b: usize, score: &PairScore) -> io::Result<()> {
     write!(
         out,
-        "{a} {b} {} {} {} {} {}",
+        "{a} {b} {} {} {} {} {} {} {}",
         score.order,
         score.shingle,
         score.blocks,
         score.combined,
+        score.containment,
+        score.final_score,
         score.tiles.len()
     )?;
     for item in &score.tiles {

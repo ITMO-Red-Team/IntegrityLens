@@ -8,13 +8,18 @@
 | 2–4 | `structsim:combined` | `jplag-normalize:avg`, `jplag-match-merging:avg`, `jplag-default:max` | H2 |
 | 5 | `structsim:combined` | лучшая оценка JPlag на этой версии | H2, baseline подстроен под набор |
 | 6 | `structsim:contrast_z` | `structsim:combined` | H3 |
+| 7–9 | `structsim:final` | `structsim:combined`, `jplag-default:avg`, `jplag-default:max` | H5 |
+| 10 | `structsim:final` | лучшая оценка JPlag на этой версии | H5, baseline подстроен под набор |
 
 Для каждого: DeLong (z, p), 95% ДИ разницы парным бутстрэпом по парам
 (10 000 повторов) и **кластерным** бутстрэпом по задачам. Второй нужен потому,
 что пары одной задачи не независимы: одно решение входит в несколько пар, а
 задачи различаются по трудности. Бутстрэп по парам этого не видит и даёт
 слишком узкий интервал; кластерный — честнее, но на 21 кластере грубее.
-p-значения DeLong поправлены по Холму внутри версии.
+p-значения DeLong поправлены по Холму внутри версии и семейства: H1–H3 — одно
+семейство, H5 — другое, потому что H5 добавлена позже как отдельный вопрос и не
+должна менять поправку уже опубликованных сравнений. Поправка по всем сравнениям
+версии сразу пишется рядом, в `delong_p_holm_all`.
 
 Пишет `results/tables/stats.csv` и `results/tables/stats.md`.
 """
@@ -39,6 +44,11 @@ def comparisons(part: pd.DataFrame, columns: list[str]) -> list[tuple[str, str, 
     if best not in {b for _, _, b in result}:
         result.append(("H2*", config.HEAD_STRUCTSIM, best))
     result.append(("H3", "structsim:contrast_z", config.HEAD_STRUCTSIM))
+    final = config.FINAL_STRUCTSIM
+    result += [("H5", final, config.HEAD_STRUCTSIM), ("H5", final, config.HEAD_JPLAG),
+               ("H5", final, "jplag-default:max")]
+    if best not in {config.HEAD_JPLAG, "jplag-default:max"}:
+        result.append(("H5*", final, best))
     return result
 
 
@@ -69,7 +79,12 @@ def run() -> None:
                   f"ДИ [{boot.low:+.3f}; {boot.high:+.3f}], по задачам [{clus.low:+.3f}; {clus.high:+.3f}]",
                   flush=True)
         for row, p in zip(version_rows, stats.holm([r["delong_p"] for r in version_rows])):
-            row["delong_p_holm"] = p
+            row["delong_p_holm_all"] = p
+        for family in ({"H5", "H5*"}, None):
+            members = [r for r in version_rows
+                       if (r["hypothesis"] in family if family else r["hypothesis"] not in {"H5", "H5*"})]
+            for row, p in zip(members, stats.holm([r["delong_p"] for r in members])):
+                row["delong_p_holm"] = p
         rows += version_rows
 
     result = pd.DataFrame(rows)

@@ -31,8 +31,12 @@ class StructsimV2Test(unittest.TestCase):
         self.assertEqual(len(result["pairs"]), 5)
         self.assertNotIn((ids[0], ids[2]), [(p["a"], p["b"]) for p in result["pairs"]])
         failures = [p for p in result["pairs"] if p["value"] is None]
-        self.assertEqual(len(failures), 3)
-        self.assertTrue(all(p["reason"]["code"] == "NOT_PARSED" and not p["fragments"] for p in failures))
+        self.assertEqual({(p["a"], p["b"]): p["reason"]["code"] for p in failures}, {
+            (ids[0], ids[1]): "NOT_PARSED_B",
+            (ids[1], ids[2]): "NOT_PARSED_A",
+            (ids[1], ids[3]): "NOT_PARSED_A",
+        })
+        self.assertTrue(all(not p["fragments"] for p in failures))
         result["pairs"].pop()
         with self.assertRaisesRegex(ValueError, "coverage"):
             v2.validate_result(job, result)

@@ -32,6 +32,7 @@ rsync -a --delete "$upload_dir/" "$1/app/"
 cd "$1/app"
 compose=(docker compose --env-file "$1/.env" -f infra/docker-compose.yml)
 # Sequential builds keep peak memory low on a small VM.
+"${compose[@]}" build web
 "${compose[@]}" build api
 "${compose[@]}" build minio-init
 "${compose[@]}" build worker-structsim

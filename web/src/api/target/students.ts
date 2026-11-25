@@ -34,7 +34,7 @@ export async function getSubmissionForm(
 export async function validateJavaFile(
   file: File,
 ): Promise<string | null> {
-  if (!file.name.toLowerCase().endsWith(".java")) {
+  if (!file.name.endsWith(".java")) {
     return "Допустим только файл с расширением .java.";
   }
 

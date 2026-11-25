@@ -59,6 +59,7 @@ export function useAssignments() {
   return useQuery({
     queryKey: qk.assignments,
     queryFn: api.listAssignments,
+    refetchInterval: 5_000,
   });
 }
 
@@ -69,6 +70,7 @@ export function useAssignment(
     queryKey: qk.assignment(id ?? ""),
     queryFn: () => api.getAssignment(id!),
     enabled: !!id,
+    refetchInterval: 3_000,
   });
 }
 
@@ -93,6 +95,7 @@ export function useSubmissions(
         pageSize,
       ),
     enabled: !!assignmentId,
+    refetchInterval: 3_000,
   });
 }
 
@@ -111,6 +114,7 @@ export function useSubmission(
         submissionId!,
       ),
     enabled: !!assignmentId && !!submissionId,
+    refetchInterval: 3_000,
   });
 }
 
@@ -132,6 +136,7 @@ export function usePair(
         b!,
       ),
     enabled: !!assignmentId && !!a && !!b,
+    refetchInterval: 3_000,
   });
 }
 

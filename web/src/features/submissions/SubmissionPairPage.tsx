@@ -83,7 +83,7 @@ function CodePane({
   });
 
   const lines =
-    sourceQuery.data?.split(/\r?\n/) ?? [];
+    sourceQuery.data?.split(/\r\n|\r|\n/) ?? [];
 
   useEffect(() => {
     if (

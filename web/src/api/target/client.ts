@@ -98,7 +98,8 @@ export async function apiTextRequest(
 
   await checkResponse(response);
 
-  return response.text();
+  // Keep a UTF-8 BOM: AI ranges are byte offsets in the original file.
+  return new TextDecoder("utf-8", { ignoreBOM: true }).decode(await response.arrayBuffer());
 }
 
 export async function apiVoidRequest(

@@ -18,6 +18,7 @@ import { authApi } from "./auth";
 
 import {
   submitJavaFile,
+  validateJavaFile,
 } from "./students";
 
 const ASSIGNMENT_ID =
@@ -33,6 +34,20 @@ const OTHER_ID =
   "00000000-0000-4000-8000-000000000302";
 
 describe("HTTP-контракты нового API", () => {
+  it("preserves the source BOM for AI byte offsets", async () => {
+    const source = "\uFEFFclass Example { /* Привет */ }\r\n";
+    server.use(http.get("*/api/submissions/:id/source", () =>
+      new HttpResponse(new TextEncoder().encode(source), {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      }),
+    ));
+    expect(await api.getSource(SUBMISSION_ID)).toBe(source);
+  });
+
+  it("rejects uppercase extensions just like the backend", async () => {
+    expect(await validateJavaFile(new File(["class Example {}"], "Example.JAVA"))).not.toBeNull();
+  });
+
   it("отправляет регистрацию и вход по OpenAPI", async () => {
     const requests = vi.fn();
 

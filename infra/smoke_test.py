@@ -15,7 +15,8 @@ from uuid import uuid4
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 
-SPEC_PATH = Path(__file__).resolve().parents[1] / "docs" / "openapi.yaml"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SPEC_PATH = REPO_ROOT / "docs" / "openapi.yaml"
 PASSWORD = "  тест smoke  "
 JAVA = """class Example {
     static long evaluate(int limit) {
@@ -328,6 +329,22 @@ def smoke(api, timeout, expect_ai_failure=False):
     refreshed = api.wait_scores(target, teacher, replacement, ("ok", ai_state), timeout)
     assert [item["submissionId"] for item in refreshed["similar"]] == [b]
     assert refreshed["ai"] == replaced["ai"]
+
+    mixed_id, mixed_link = api.assignment(teacher, "Задание с неразобранной работой")
+    mixed = "/api/assignments/" + mixed_id
+    good = api.submit(mixed_link, first)["submissionId"]
+    malformed_java = (REPO_ROOT / "worker/core/known/broken.java").read_bytes()
+    malformed = api.submit(mixed_link, second, malformed_java)["submissionId"]
+    api.wait_scores(mixed, teacher, good, ("not_applicable", ai_state), timeout)
+
+    _, third = api.auth(f"third-{suffix}@example.org", "student", "Третий студент")
+    good_peer = api.submit(mixed_link, third, JAVA.replace(b"evaluate(42)", b"evaluate(47)"))["submissionId"]
+    good_detail = api.wait_scores(mixed, teacher, good, ("ok", ai_state), timeout)
+    expected_pair, _ = api.call("GET", f"{mixed}/pairs/{good}/{good_peer}", 200, session=teacher)
+    assert good_detail["similarity"] == expected_pair["score"]
+    scores = {row["submissionId"]: row["similarity"] for row in api.rows(mixed, teacher)["items"]}
+    assert scores[good] == scores[good_peer] == expected_pair["score"]
+    assert scores[malformed]["status"] == "failed" and scores[malformed]["reason"]["code"] == "NOT_PARSED"
 
     for active in (teacher, None):
         _, headers = api.call("POST", "/api/auth/logout", 204, session=active)

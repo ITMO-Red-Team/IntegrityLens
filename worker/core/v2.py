@@ -121,8 +121,13 @@ def run(input_dir, output_dir):
     params, scored, failed = analyze(job, input_dir)
     pairs = []
     for a, b in _expected_pairs(job):
-        if a in failed or b in failed:
-            pair = {"value": None, "details": {}, "fragments": [], "reason": {"code": "NOT_PARSED"}}
+        a_failed, b_failed = a in failed, b in failed
+        if a_failed or b_failed:
+            if a_failed and b_failed:
+                code = "NOT_PARSED_BOTH"
+            else:
+                code = "NOT_PARSED_A" if a_failed else "NOT_PARSED_B"
+            pair = {"value": None, "details": {}, "fragments": [], "reason": {"code": code}}
         else:
             pair = scored[a, b]
         pairs.append({"a": a, "b": b, **pair})

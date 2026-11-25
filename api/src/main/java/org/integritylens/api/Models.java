@@ -41,6 +41,10 @@ final class Models {
         static Score failed(String code) {
             String message = switch (code) {
                 case "NOT_PARSED" -> "Не удалось разобрать файл как Java-код.";
+                case "PAIR_NOT_PARSED" -> "Не удалось сравнить работы из-за ошибки разбора Java.";
+                case "NOT_PARSED_A" -> "Не удалось разобрать левый файл как Java-код.";
+                case "NOT_PARSED_B" -> "Не удалось разобрать правый файл как Java-код.";
+                case "NOT_PARSED_BOTH" -> "Не удалось разобрать оба файла как Java-код.";
                 case "RUN_TIMEOUT" -> "Истекло время анализа.";
                 default -> "Не удалось завершить анализ.";
             };

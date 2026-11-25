@@ -17,6 +17,7 @@ from itertools import combinations
 from pathlib import Path
 
 from structsim import compare, contrast, semgrep, tiles
+from structsim import treesitter
 from structsim.labels import to_program
 from structsim.model import Program
 
@@ -32,6 +33,11 @@ class PairScore:
     blocks: float
     combined: float
     contrast_z: float | None = None
+    containment: float = 0.0
+
+    @property
+    def final(self) -> float:
+        return max(self.combined, self.containment)
 
 
 @dataclass(frozen=True)
@@ -79,7 +85,7 @@ class Report:
 
     def top(self, count: int = 10) -> list[PairScore]:
         """Пары, самые похожие сначала."""
-        return sorted(self.scores, key=lambda s: s.combined, reverse=True)[:count]
+        return sorted(self.scores, key=lambda s: s.final, reverse=True)[:count]
 
     def tiles(
         self, a: str, b: str, min_length: int = tiles.MIN_TILE_LENGTH
@@ -127,14 +133,18 @@ def to_programs(
     skipped: dict[str, str] = {}
     for path in files:
         path = Path(path)
-        try:
-            tree = semgrep.dump_ast(path, image=image)
-        except semgrep.SemgrepError as exc:
-            skipped[path.name] = str(exc)
-            continue
-        program = to_program(
-            tree, language=semgrep.language_of(path), source=path.name
-        )
+        program = None
+        if semgrep.language_of(path) == "java":
+            program = treesitter.java_program(path)
+        if program is None:
+            try:
+                tree = semgrep.dump_ast(path, image=image)
+            except semgrep.SemgrepError as exc:
+                skipped[path.name] = str(exc)
+                continue
+            program = to_program(
+                tree, language=semgrep.language_of(path), source=path.name
+            )
         if not program.labels:
             skipped[path.name] = "разобрался, но меток не дал"
             continue
@@ -157,6 +167,7 @@ def score_pairs(programs: dict[str, Program]) -> list[PairScore]:
                 shingle=measures["shingle"],
                 blocks=measures["blocks"],
                 combined=measures["combined"],
+                containment=measures["containment"],
             )
         )
         combined_by_pair[contrast.pair_key(name_a, name_b)] = measures["combined"]
@@ -210,15 +221,19 @@ def format_report(report: Report, top: int = 10) -> str:
 
     lines.append("")
     has_z = any(score.contrast_z is not None for score in best)
-    header = f"{'пара':<40} {'COMBINED':>9} {'поряд':>7} {'фрагм':>7} {'функц':>7}"
+    header = (
+        f"{'пара':<40} {'итог':>6} {'COMBINED':>9} {'поряд':>7} {'фрагм':>7}"
+        f" {'функц':>7} {'включ':>7}"
+    )
     if has_z:
         header += f" {'contrast-z':>11}"
     lines.append(header)
     for score in best:
         pair = f"{score.a} ↔ {score.b}"
         row = (
-            f"{pair[:40]:<40} {score.combined:>9.3f} {score.order:>7.2f}"
-            f" {score.shingle:>7.2f} {score.blocks:>7.2f}"
+            f"{pair[:40]:<40} {score.final:>6.3f} {score.combined:>9.3f}"
+            f" {score.order:>7.2f} {score.shingle:>7.2f} {score.blocks:>7.2f}"
+            f" {score.containment:>7.2f}"
         )
         if has_z:
             row += (

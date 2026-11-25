@@ -13,7 +13,8 @@
 - `work/trees/<версия>/<задача>/<решение>.json` — деревья шага 1;
 - `work/structsim/<версия>/<задача>.csv` — все пары набора;
 - `results/scores/structsim.csv` — размеченные пары: `version, pair,
-  combined, contrast_z, order, shingle, blocks, ms`; `ms` — время
+  combined, contrast_z, order, shingle, blocks, containment, final, ms`;
+  `final` — итог пары, большее из `combined` и `containment`; `ms` — время
   `compare.combined` на пару;
 - `results/tables/structsim_parse.csv` — по решению: разобралось ли, время
   шага 1 и шага 2, число меток.
@@ -80,6 +81,7 @@ def _score_chunk(tree_dir: str, chunk: list[tuple[str, str]]) -> list[tuple]:
             compare.order_similarity(pa.labels, pb.labels),
             compare.shingle_similarity(pa.labels, pb.labels),
             compare.block_similarity(pa, pb),
+            compare.containment_similarity(pa.labels, pb.labels),
             ms,
         ))
     return rows
@@ -94,7 +96,7 @@ def _labels_info(tree_path: Path) -> tuple[int, float]:
 
 # --- стадия ---------------------------------------------------------------
 
-FIELDS = ["a", "b", "combined", "order", "shingle", "blocks", "ms", "contrast_z"]
+FIELDS = ["a", "b", "combined", "order", "shingle", "blocks", "containment", "final", "ms", "contrast_z"]
 
 
 def _score_problem(pool: ProcessPoolExecutor, version: str, problem: str, parsed: list[str]) -> Path:
@@ -113,10 +115,12 @@ def _score_problem(pool: ProcessPoolExecutor, version: str, problem: str, parsed
     with tmp.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(FIELDS)
-        for a, b, combined, order, shingle, blocks, ms in rows:
+        for a, b, combined, order, shingle, blocks, containment, ms in rows:
             zz = z.get(contrast.pair_key(a, b))
+            final = max(combined, containment)
             writer.writerow([a, b, f"{combined:.6f}", f"{order:.6f}", f"{shingle:.6f}",
-                             f"{blocks:.6f}", f"{ms:.2f}", "" if zz is None else f"{zz:.6f}"])
+                             f"{blocks:.6f}", f"{containment:.6f}", f"{final:.6f}", f"{ms:.2f}",
+                             "" if zz is None else f"{zz:.6f}"])
     tmp.replace(out)
     return out
 
@@ -167,15 +171,16 @@ def run() -> None:
     missing = 0
     with paths.STRUCTSIM_CSV.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["version", "pair", "combined", "contrast_z", "order", "shingle", "blocks", "ms"])
+        writer.writerow(["version", "pair", "combined", "contrast_z", "order", "shingle", "blocks",
+                         "containment", "final", "ms"])
         for version in config.DATASET_VERSIONS:
             for problem in problems:
                 for p in by_problem[problem]:
                     r = results[version].get(frozenset((p["sub1"], p["sub2"])))
                     if r is None:
                         missing += 1
-                        writer.writerow([version, p["pair"], "", "", "", "", "", ""])
+                        writer.writerow([version, p["pair"], "", "", "", "", "", "", "", ""])
                         continue
                     writer.writerow([version, p["pair"], r["combined"], r["contrast_z"], r["order"],
-                                     r["shingle"], r["blocks"], r["ms"]])
+                                     r["shingle"], r["blocks"], r["containment"], r["final"], r["ms"]])
     print(f"записано: {paths.STRUCTSIM_CSV.name}; размеченных пар без оценки {missing}")

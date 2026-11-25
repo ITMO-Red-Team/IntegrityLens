@@ -47,11 +47,11 @@ pairs = native.score_all(programs)   # порядок как у combinations(pro
 stdin и stdout, текст, разделитель — пробел или перевод строки.
 
 ```
-structsim-native/1 <программ> <меток в алфавите> <min_tile> <потоков>
+structsim-native/3 <программ> <меток в алфавите> <min_tile> <потоков>
 <T> <метка>×T <строка>×T <B> (<длина блока> <метка>×длина)×B
 ```
 
-Для сравнения с источниками `structsim-native/2` добавляет после числа потоков флаг
+Для сравнения с источниками `structsim-native/4` добавляет после числа потоков флаг
 `0` или `1` для каждой программы. В выход входят пары с хотя бы одной целевой
 программой (флаг `1`). Python передаёт флаги через аргумент `targets`.
 
@@ -59,7 +59,7 @@ structsim-native/1 <программ> <меток в алфавите> <min_tile
 доступные. Алфавит до 4096 меток. Выход, строка на пару в порядке `combinations`:
 
 ```
-<a> <b> <order> <shingle> <blocks> <combined> <K> (<start_a> <start_b> <length> <a_from> <a_to> <b_from> <b_to>)×K
+<a> <b> <order> <shingle> <blocks> <combined> <containment> <final> <K> (<start_a> <start_b> <length> <a_from> <a_to> <b_from> <b_to>)×K
 ```
 
 Числа — кратчайшая запись, которая разбирается в то же значение. `STRUCTSIM_NATIVE_TIMINGS=1` —

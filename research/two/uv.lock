@@ -814,13 +814,22 @@ wheels = [
 
 [[package]]
 name = "structsim"
-version = "0.1.0"
+version = "0.3.0"
 source = { editable = "../../tools/structsim" }
 
 [package.metadata]
+requires-dist = [
+    { name = "tree-sitter", marker = "extra == 'java'", specifier = "==0.27.0" },
+    { name = "tree-sitter-java", marker = "extra == 'java'", specifier = "==0.23.5" },
+]
+provides-extras = ["java"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.3" }]
+dev = [
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "tree-sitter", specifier = "==0.27.0" },
+    { name = "tree-sitter-java", specifier = "==0.23.5" },
+]
 
 [[package]]
 name = "threadpoolctl"

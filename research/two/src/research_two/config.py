@@ -103,12 +103,15 @@ JPLAG_PARALLEL = 4
 # --- Оценки, которые сравниваются -----------------------------------------
 
 # Имя оценки в таблицах → (инструмент, столбец). Порядок — порядок в отчёте.
-STRUCTSIM_SCORES: tuple[str, ...] = ("combined", "contrast_z", "order", "shingle", "blocks")
+STRUCTSIM_SCORES: tuple[str, ...] = (
+    "final", "combined", "contrast_z", "order", "shingle", "blocks", "containment",
+)
 JPLAG_SCORES: tuple[str, ...] = ("avg", "max")
 
 # Головные оценки: с ними проверяются гипотезы.
 HEAD_STRUCTSIM = "structsim:combined"
 HEAD_JPLAG = "jplag-default:avg"
+FINAL_STRUCTSIM = "structsim:final"
 
 # --- Статистика -----------------------------------------------------------
 

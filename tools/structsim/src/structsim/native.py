@@ -20,8 +20,8 @@ from pathlib import Path
 from structsim.model import Program, Tile
 from structsim.tiles import MIN_TILE_LENGTH
 
-PROTOCOL = "structsim-native/1"
-SCOPED_PROTOCOL = "structsim-native/2"
+PROTOCOL = "structsim-native/3"
+SCOPED_PROTOCOL = "structsim-native/4"
 BINARY_ENV = "STRUCTSIM_NATIVE"
 BINARY_NAME = "structsim-native"
 _LOCAL_BUILD = Path(__file__).resolve().parents[2] / "native" / "target" / "release" / BINARY_NAME
@@ -54,6 +54,8 @@ class NativePair:
     shingle: float
     blocks: float
     combined: float
+    containment: float
+    final: float
     tiles: tuple[ShownTile, ...]
 
 
@@ -105,7 +107,7 @@ def _span(first: str, last: str) -> tuple[int, int] | None:
 def _decode(line: str) -> NativePair:
     fields = line.split()
     tiles = []
-    for at in range(7, len(fields), 7):
+    for at in range(9, len(fields), 7):
         start_a, start_b, length, first_a, last_a, first_b, last_b = fields[at : at + 7]
         tiles.append(
             ShownTile(
@@ -121,6 +123,8 @@ def _decode(line: str) -> NativePair:
         shingle=float(fields[3]),
         blocks=float(fields[4]),
         combined=float(fields[5]),
+        containment=float(fields[6]),
+        final=float(fields[7]),
         tiles=tuple(tiles),
     )
 

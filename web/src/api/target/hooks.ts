@@ -5,8 +5,14 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
-import { api } from "./client";
-import type { CreateAssignmentRequest } from "./types";
+import {
+  api,
+  type SubmissionSort,
+} from "./client";
+
+import type {
+  CreateAssignmentRequest,
+} from "./types";
 
 export const qk = {
   assignments: ["target", "assignments"] as const,
@@ -16,6 +22,19 @@ export const qk = {
 
   submissions: (id: string) =>
     ["target", "submissions", id] as const,
+
+  submissionsPage: (
+    id: string,
+    sort: SubmissionSort,
+    page: number,
+    pageSize: number,
+  ) =>
+    [
+      ...qk.submissions(id),
+      sort,
+      page,
+      pageSize,
+    ] as const,
 
   submission: (
     assignmentId: string,
@@ -43,7 +62,9 @@ export function useAssignments() {
   });
 }
 
-export function useAssignment(id: string | undefined) {
+export function useAssignment(
+  id: string | undefined,
+) {
   return useQuery({
     queryKey: qk.assignment(id ?? ""),
     queryFn: () => api.getAssignment(id!),
@@ -53,11 +74,24 @@ export function useAssignment(id: string | undefined) {
 
 export function useSubmissions(
   assignmentId: string | undefined,
+  sort: SubmissionSort = "similarity",
+  page = 1,
+  pageSize = 20,
 ) {
   return useQuery({
-    queryKey: qk.submissions(assignmentId ?? ""),
+    queryKey: qk.submissionsPage(
+      assignmentId ?? "",
+      sort,
+      page,
+      pageSize,
+    ),
     queryFn: () =>
-      api.listSubmissions(assignmentId!),
+      api.listSubmissions(
+        assignmentId!,
+        sort,
+        page,
+        pageSize,
+      ),
     enabled: !!assignmentId,
   });
 }
@@ -92,7 +126,11 @@ export function usePair(
       b ?? "",
     ),
     queryFn: () =>
-      api.getPair(assignmentId!, a!, b!),
+      api.getPair(
+        assignmentId!,
+        a!,
+        b!,
+      ),
     enabled: !!assignmentId && !!a && !!b,
   });
 }

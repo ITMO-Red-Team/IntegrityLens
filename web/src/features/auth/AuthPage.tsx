@@ -1,5 +1,8 @@
 
-import { useState, type FormEvent } from "react";
+import {
+  useState,
+  type FormEvent,
+} from "react";
 import {
   useMutation,
   useQueryClient,
@@ -18,6 +21,11 @@ import { ApiError } from "../../api/target/client";
 
 type AuthMode = "login" | "register";
 
+type AuthLocationState = {
+  from?: unknown;
+  message?: unknown;
+};
+
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message;
@@ -26,17 +34,63 @@ function errorMessage(error: unknown): string {
   return "Не удалось связаться с сервером. Попробуйте ещё раз.";
 }
 
-export function AuthPage({ mode }: { mode: AuthMode }) {
+function getReturnPath(
+  value: unknown,
+): string | null {
+  if (
+    typeof value !== "string" ||
+    value.length > 2048 ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("\\")
+  ) {
+    return null;
+  }
+
+  const pathname =
+    value.split(/[?#]/, 1)[0] ?? "";
+
+  if (!/^\/submit\/[^/]+$/.test(pathname)) {
+    return null;
+  }
+
+  return value;
+}
+
+export function AuthPage({
+  mode,
+}: {
+  mode: AuthMode;
+}) {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
 
   const isRegister = mode === "register";
 
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("student");
+  const locationState =
+    location.state as AuthLocationState | null;
+
+  const returnPath = getReturnPath(
+    locationState?.from,
+  );
+
+  const successMessage =
+    typeof locationState?.message === "string"
+      ? locationState.message
+      : null;
+
+  const [fullName, setFullName] =
+    useState("");
+
+  const [email, setEmail] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const [role, setRole] =
+    useState<UserRole>("student");
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -62,8 +116,10 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           state: {
             message:
               "Регистрация успешна. Теперь войдите в аккаунт.",
+            from: returnPath,
           },
         });
+
         return;
       }
 
@@ -72,23 +128,25 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         user,
       );
 
-      navigate(
-        user.role === "teacher"
-          ? "/assignments"
-          : "/student",
-        { replace: true },
-      );
+      const destination =
+        user.role === "student" && returnPath
+          ? returnPath
+          : user.role === "teacher"
+            ? "/assignments"
+            : "/student";
+
+      navigate(destination, {
+        replace: true,
+      });
     },
   });
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
     mutation.mutate();
   }
-
-  const successMessage =
-    (location.state as { message?: string } | null)
-      ?.message;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-12">
@@ -105,7 +163,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
         <section className="panel p-7">
           <h1 className="mb-6 text-2xl font-semibold">
-            {isRegister ? "Регистрация" : "Вход"}
+            {isRegister
+              ? "Регистрация"
+              : "Вход"}
           </h1>
 
           {successMessage && (
@@ -117,12 +177,21 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             </div>
           )}
 
+          {returnPath && (
+            <div className="mb-5 rounded-md border border-line bg-sunk p-3 text-sm text-muted">
+              После входа вы вернётесь
+              на страницу сдачи задания.
+            </div>
+          )}
+
           {mutation.isError && (
             <div
               role="alert"
               className="mb-5 rounded-md border border-line bg-[var(--c-high-bg)] p-3 text-sm text-[var(--c-high)]"
             >
-              {errorMessage(mutation.error)}
+              {errorMessage(
+                mutation.error,
+              )}
             </div>
           )}
 
@@ -246,6 +315,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 Уже есть учётная запись?{" "}
                 <Link
                   to="/login"
+                  state={{
+                    from: returnPath,
+                  }}
                   className="font-medium text-accent underline"
                 >
                   Войти
@@ -256,6 +328,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 Нет учётной записи?{" "}
                 <Link
                   to="/register"
+                  state={{
+                    from: returnPath,
+                  }}
                   className="font-medium text-accent underline"
                 >
                   Зарегистрироваться

@@ -17,6 +17,10 @@ import {
 } from "./assignment-write-handlers";
 
 import {
+  getMockCurrentUser,
+} from "./auth-handlers";
+
+import {
   DEMO_STUDENT_ID,
   getMockWork,
   isMockWorkAttemptOpen,
@@ -36,27 +40,46 @@ function apiError(
   );
 }
 
+function currentStudent() {
+  const user = getMockCurrentUser();
+
+  if (user?.role === "student") {
+    return {
+      id: user.id,
+      fullName: user.fullName,
+    };
+  }
+
+  // Старые тесты используют студентский API
+  // без отдельной авторизации.
+  return {
+    id: DEMO_STUDENT_ID,
+    fullName: "Студент (демо)",
+  };
+}
+
 export function resetMockStudentSubmissions() {
   resetMockWorkStore();
 }
 
-// Сохраняем вспомогательную функцию,
-// используемую существующими тестами.
+// Совместимость с тестами ручного сброса.
+// При наличии студенческой сессии
+// открываем попытку именно этого студента.
 export function openMockStudentAttempt(
   token: string,
 ) {
   const assignment =
-    getMockAssignmentByToken(
-      token,
-    );
+    getMockAssignmentByToken(token);
 
   if (!assignment) {
     return;
   }
 
+  const student = currentStudent();
+
   const work = getMockWork(
     assignment.id,
-    DEMO_STUDENT_ID,
+    student.id,
   );
 
   if (!work) {
@@ -65,7 +88,7 @@ export function openMockStudentAttempt(
 
   openMockWorkAttempt(
     assignment.id,
-    DEMO_STUDENT_ID,
+    student.id,
     work.receipt.submissionId,
   );
 }
@@ -91,11 +114,12 @@ export const studentHandlers = [
         );
       }
 
-      const work =
-        getMockWork(
-          assignment.id,
-          DEMO_STUDENT_ID,
-        );
+      const student = currentStudent();
+
+      const work = getMockWork(
+        assignment.id,
+        student.id,
+      );
 
       const form: SubmissionForm = {
         title: assignment.title,
@@ -106,13 +130,11 @@ export const studentHandlers = [
         canSubmit:
           isMockWorkAttemptOpen(
             assignment.id,
-            DEMO_STUDENT_ID,
+            student.id,
           ),
       };
 
-      return HttpResponse.json(
-        form,
-      );
+      return HttpResponse.json(form);
     },
   ),
 
@@ -139,10 +161,12 @@ export const studentHandlers = [
         );
       }
 
+      const student = currentStudent();
+
       if (
         !isMockWorkAttemptOpen(
           assignment.id,
-          DEMO_STUDENT_ID,
+          student.id,
         )
       ) {
         return apiError(
@@ -155,8 +179,7 @@ export const studentHandlers = [
       let data: FormData;
 
       try {
-        data =
-          await request.formData();
+        data = await request.formData();
       } catch {
         return apiError(
           422,
@@ -165,12 +188,9 @@ export const studentHandlers = [
         );
       }
 
-      const files =
-        data.getAll("file");
+      const files = data.getAll("file");
 
-      if (
-        files.length === 0
-      ) {
+      if (files.length === 0) {
         return apiError(
           422,
           "FILE_REQUIRED",
@@ -178,9 +198,7 @@ export const studentHandlers = [
         );
       }
 
-      if (
-        files.length !== 1
-      ) {
+      if (files.length !== 1) {
         return apiError(
           422,
           "MULTIPLE_FILES",
@@ -188,8 +206,7 @@ export const studentHandlers = [
         );
       }
 
-      const file =
-        files[0];
+      const file = files[0];
 
       if (
         !file ||
@@ -197,12 +214,9 @@ export const studentHandlers = [
         !("name" in file) ||
         !("size" in file) ||
         !("arrayBuffer" in file) ||
-        typeof file.name !==
-          "string" ||
-        typeof file.size !==
-          "number" ||
-        typeof file.arrayBuffer !==
-          "function"
+        typeof file.name !== "string" ||
+        typeof file.size !== "number" ||
+        typeof file.arrayBuffer !== "function"
       ) {
         return apiError(
           422,
@@ -223,9 +237,7 @@ export const studentHandlers = [
         );
       }
 
-      if (
-        file.size === 0
-      ) {
+      if (file.size === 0) {
         return apiError(
           422,
           "EMPTY_FILE",
@@ -234,8 +246,7 @@ export const studentHandlers = [
       }
 
       if (
-        file.size >
-        MAX_JAVA_BYTES
+        file.size > MAX_JAVA_BYTES
       ) {
         return apiError(
           413,
@@ -247,16 +258,14 @@ export const studentHandlers = [
       let source: string;
 
       try {
-        const bytes =
-          new Uint8Array(
-            await file.arrayBuffer(),
-          );
+        const bytes = new Uint8Array(
+          await file.arrayBuffer(),
+        );
 
-        source =
-          new TextDecoder(
-            "utf-8",
-            { fatal: true },
-          ).decode(bytes);
+        source = new TextDecoder(
+          "utf-8",
+          { fatal: true },
+        ).decode(bytes);
       } catch {
         return apiError(
           422,
@@ -265,13 +274,29 @@ export const studentHandlers = [
         );
       }
 
-      const receipt =
-        saveMockWork(
+      // Повторная проверка после await.
+      // Только один запрос может закрыть
+      // попытку одного студента.
+      if (
+        !isMockWorkAttemptOpen(
           assignment.id,
-          source,
-          file.name,
-          DEMO_STUDENT_ID,
+          student.id,
+        )
+      ) {
+        return apiError(
+          409,
+          "SUBMISSION_ALREADY_ACCEPTED",
+          "Работа уже принята.",
         );
+      }
+
+      const receipt = saveMockWork(
+        assignment.id,
+        source,
+        file.name,
+        student.id,
+        student.fullName,
+      );
 
       return HttpResponse.json(
         receipt,

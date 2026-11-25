@@ -1,5 +1,9 @@
 
-import { useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 
@@ -17,6 +21,8 @@ import type {
 type Fragment =
   PairResult["methods"]["structsim"]["fragments"][number];
 
+type Side = "a" | "b";
+
 function errorMessage(error: unknown): string {
   return error instanceof ApiError
     ? error.message
@@ -27,13 +33,10 @@ function scoreText(score: Score): string {
   switch (score.status) {
     case "pending":
       return "В анализе…";
-
     case "failed":
       return "Ошибка анализа";
-
     case "not_applicable":
       return "Нет данных";
-
     case "ok":
       return score.value === null
         ? "Нет данных"
@@ -58,13 +61,17 @@ function CodePane({
   fragments,
   selectedFragment,
   side,
+  onSelectFragment,
 }: {
   label: string;
   submissionId: string;
   fragments: Fragment[];
   selectedFragment: number | null;
-  side: "a" | "b";
+  side: Side;
+  onSelectFragment: (index: number, sourceSide: Side | null) => void;
 }) {
+  const codeContainerRef = useRef<HTMLDivElement>(null);
+
   const sourceQuery = useQuery({
     queryKey: [
       "target",
@@ -78,8 +85,49 @@ function CodePane({
   const lines =
     sourceQuery.data?.split(/\r?\n/) ?? [];
 
+  useEffect(() => {
+    if (
+      selectedFragment === null ||
+      !sourceQuery.isSuccess
+    ) {
+      return;
+    }
+
+    const fragment = fragments[selectedFragment];
+    const firstLine = fragment?.[side][0];
+
+    if (
+      firstLine === undefined ||
+      !Number.isInteger(firstLine) ||
+      firstLine < 1
+    ) {
+      return;
+    }
+
+    const target = codeContainerRef.current?.querySelector(
+      `[data-line="${firstLine}"]`,
+    );
+
+    if (
+      target &&
+      typeof target.scrollIntoView === "function"
+    ) {
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    }
+  }, [
+    selectedFragment,
+    sourceQuery.isSuccess,
+    fragments,
+    side,
+  ]);
+
   return (
     <section
+      role="region"
       aria-label={`Код работы ${label}`}
       className="panel min-w-0 overflow-hidden"
     >
@@ -118,72 +166,103 @@ function CodePane({
       )}
 
       {sourceQuery.isSuccess && (
-        <div className="overflow-auto">
-          <pre className="min-w-max py-3 font-mono text-xs leading-6">
-            <code>
-              {lines.map((line, index) => {
-                const lineNumber = index + 1;
+        <div
+          ref={codeContainerRef}
+          className="max-h-[560px] overflow-auto"
+          data-code-scroll={side}
+        >
+          <div className="min-w-max py-3 font-mono text-xs leading-6">
+            {lines.map((line, index) => {
+              const lineNumber = index + 1;
 
-                const matchingFragments = fragments
-                  .map((fragment, fragmentIndex) => ({
-                    range: fragment[side],
-                    fragmentIndex,
-                  }))
-                  .filter(({ range }) =>
-                    belongsToRange(
-                      lineNumber,
-                      range,
-                    ),
-                  );
+              const matchingFragments = fragments
+                .map((fragment, fragmentIndex) => ({
+                  range: fragment[side],
+                  fragmentIndex,
+                }))
+                .filter(({ range }) =>
+                  belongsToRange(lineNumber, range),
+                );
 
-                const isMatching =
-                  matchingFragments.length > 0;
+              const isMatching =
+                matchingFragments.length > 0;
 
-                const isSelected =
-                  selectedFragment !== null &&
-                  matchingFragments.some(
-                    ({ fragmentIndex }) =>
-                      fragmentIndex ===
-                      selectedFragment,
-                  );
+              const isSelected =
+                selectedFragment !== null &&
+                matchingFragments.some(
+                  ({ fragmentIndex }) =>
+                    fragmentIndex === selectedFragment,
+                );
 
-                const background = isSelected
-                  ? "bg-amber-300"
-                  : isMatching
-                    ? "bg-amber-100"
-                    : "";
+              const background = isSelected
+                ? "bg-amber-300"
+                : isMatching
+                  ? "bg-amber-100"
+                  : "";
 
+              const content = (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="mr-4 inline-block w-12 shrink-0 select-none border-r border-line pr-3 text-right text-muted"
+                  >
+                    {lineNumber}
+                  </span>
+
+                  <span className="whitespace-pre pr-5">
+                    {line || " "}
+                  </span>
+                </>
+              );
+
+              if (!isMatching) {
                 return (
                   <div
                     key={lineNumber}
                     data-line={lineNumber}
-                    data-matching={
-                      isMatching
-                        ? "true"
-                        : undefined
-                    }
-                    data-selected={
-                      isSelected
-                        ? "true"
-                        : undefined
-                    }
-                    className={`flex min-w-max ${background}`}
+                    className="flex min-w-max"
                   >
-                    <span
-                      aria-hidden="true"
-                      className="mr-4 inline-block w-12 shrink-0 select-none border-r border-line pr-3 text-right text-muted"
-                    >
-                      {lineNumber}
-                    </span>
-
-                    <span className="whitespace-pre pr-5">
-                      {line || " "}
-                    </span>
+                    {content}
                   </div>
                 );
-              })}
-            </code>
-          </pre>
+              }
+
+              const firstMatch =
+                matchingFragments[0]?.fragmentIndex;
+
+              return (
+                <button
+                  key={lineNumber}
+                  type="button"
+                  data-line={lineNumber}
+                  data-matching="true"
+                  data-selected={
+                    isSelected ? "true" : undefined
+                  }
+                  aria-pressed={isSelected}
+                  aria-label={
+                    `${label}, строка ${lineNumber}, ` +
+                    "показать совпадение"
+                  }
+                  title="Перейти к соответствующему фрагменту"
+                  className={
+                    `flex min-w-max w-full cursor-pointer ` +
+                    `text-left font-mono text-xs leading-6 ` +
+                    `hover:bg-amber-200 focus-visible:outline ` +
+                    `focus-visible:outline-2 focus-visible:outline-accent ` +
+                    background
+                  }
+                  onClick={() => {
+                    if (firstMatch !== undefined) {
+                      onSelectFragment(firstMatch, side);
+                    }
+                  }}
+                >
+                  {content}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </section>
@@ -253,8 +332,6 @@ export function SubmissionPairPage() {
     b,
   );
 
-  // Детали основной работы содержат
-  // assignmentId похожих работ.
   const mainSubmissionQuery = useSubmission(
     assignmentId,
     a,
@@ -265,12 +342,22 @@ export function SubmissionPairPage() {
     setSelectedFragment,
   ] = useState<number | null>(null);
 
+  const [
+    selectionOrigin,
+    setSelectionOrigin,
+  ] = useState<Side | null>(null);
+
+  function selectFragment(
+    index: number,
+    origin: Side | null,
+  ) {
+    setSelectionOrigin(origin);
+    setSelectedFragment(index);
+  }
+
   if (!assignmentId || !a || !b) {
     return (
-      <section
-        role="alert"
-        className="panel p-6"
-      >
+      <section role="alert" className="panel p-6">
         Некорректная ссылка на сравнение.
       </section>
     );
@@ -278,10 +365,7 @@ export function SubmissionPairPage() {
 
   if (a === b) {
     return (
-      <section
-        role="alert"
-        className="panel p-6"
-      >
+      <section role="alert" className="panel p-6">
         Для сравнения нужны две разные работы.
       </section>
     );
@@ -300,10 +384,7 @@ export function SubmissionPairPage() {
 
   if (pairQuery.isError) {
     return (
-      <section
-        role="alert"
-        className="panel p-6"
-      >
+      <section role="alert" className="panel p-6">
         <h1 className="mb-3 text-xl font-semibold">
           Не удалось сравнить работы
         </h1>
@@ -326,7 +407,6 @@ export function SubmissionPairPage() {
   }
 
   const pair = pairQuery.data;
-
   const fragments =
     pair.methods.structsim.fragments;
 
@@ -342,9 +422,6 @@ export function SubmissionPairPage() {
       (item) => item.submissionId === b,
     );
 
-  // Нельзя автоматически подставлять
-  // текущее задание: работа B может
-  // принадлежать заданию-источнику.
   const otherAssignmentId =
     similarWork?.assignmentId;
 
@@ -406,10 +483,18 @@ export function SubmissionPairPage() {
           Совпадающие участки
         </h2>
 
+        <p className="mb-3 text-sm text-muted">
+          Выберите фрагмент или нажмите
+          на подсвеченную строку: связанный
+          участок откроется во второй панели.
+        </p>
+
         <FragmentPicker
           fragments={fragments}
           selected={active}
-          onSelect={setSelectedFragment}
+          onSelect={(index) =>
+            selectFragment(index, null)
+          }
         />
       </section>
 
@@ -420,6 +505,7 @@ export function SubmissionPairPage() {
           fragments={fragments}
           selectedFragment={active}
           side="a"
+          onSelectFragment={selectFragment}
         />
 
         <CodePane
@@ -428,8 +514,18 @@ export function SubmissionPairPage() {
           fragments={fragments}
           selectedFragment={active}
           side="b"
+          onSelectFragment={selectFragment}
         />
       </div>
+
+      {selectionOrigin && active !== null && (
+        <p role="status" className="text-sm text-muted">
+          Выбран фрагмент {active + 1}.
+          Связанная область работы{" "}
+          {selectionOrigin === "a" ? "B" : "A"}{" "}
+          выделена и прокручена к совпадению.
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <Link
@@ -453,10 +549,7 @@ export function SubmissionPairPage() {
             Открыть работу B как основную
           </Link>
         ) : mainSubmissionQuery.isPending ? (
-          <span
-            role="status"
-            className="text-sm text-muted"
-          >
+          <span role="status" className="text-sm text-muted">
             Определяем задание второй работы...
           </span>
         ) : (

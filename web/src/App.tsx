@@ -12,6 +12,7 @@ import {
   Navigate,
   Outlet,
   RouterProvider,
+  useLocation,
   useNavigate,
   type RouteObject,
 } from "react-router-dom";
@@ -61,6 +62,7 @@ function ProtectedLayout({
   role: "teacher" | "student";
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
 
   const {
@@ -76,6 +78,11 @@ function ProtectedLayout({
         queryError.status === 401
       ) && count < 1,
   });
+
+  const requestedPath =
+    location.pathname +
+    location.search +
+    location.hash;
 
   async function logout() {
     try {
@@ -97,20 +104,32 @@ function ProtectedLayout({
 
   if (isPending) {
     return (
-      <div className="p-8 text-center text-muted">
+      <div
+        role="status"
+        className="p-8 text-center text-muted"
+      >
         Проверяем сессию...
       </div>
     );
   }
 
   if (
-    error instanceof ApiError &&
-    error.status === 401
+    !user &&
+    (
+      !error ||
+      (
+        error instanceof ApiError &&
+        error.status === 401
+      )
+    )
   ) {
     return (
       <Navigate
         to="/login"
         replace
+        state={{
+          from: requestedPath,
+        }}
       />
     );
   }
@@ -132,6 +151,9 @@ function ProtectedLayout({
       <Navigate
         to="/login"
         replace
+        state={{
+          from: requestedPath,
+        }}
       />
     );
   }

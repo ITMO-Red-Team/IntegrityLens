@@ -10,7 +10,7 @@ import type {
 export const DEMO_STUDENT_ID =
   "00000000-0000-4000-8000-000000000801";
 
-type StoredWork = {
+export type StoredWork = {
   assignmentId: string;
   studentId: string;
   fullName: string;
@@ -20,10 +20,7 @@ type StoredWork = {
   attemptOpen: boolean;
 };
 
-const works = new Map<
-  string,
-  StoredWork
->();
+const works = new Map<string, StoredWork>();
 
 function key(
   assignmentId: string,
@@ -91,6 +88,7 @@ export function saveMockWork(
   source: string,
   fileName: string,
   studentId = DEMO_STUDENT_ID,
+  fullName = "Студент (демо)",
 ): SubmissionReceipt {
   const receipt: SubmissionReceipt = {
     submissionId: crypto.randomUUID(),
@@ -102,7 +100,7 @@ export function saveMockWork(
     {
       assignmentId,
       studentId,
-      fullName: "Студент (демо)",
+      fullName,
       fileName,
       source,
       receipt,

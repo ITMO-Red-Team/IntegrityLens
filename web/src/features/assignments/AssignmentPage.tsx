@@ -1,6 +1,11 @@
 
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
 import {
   useAssignment,
@@ -16,7 +21,12 @@ import type {
   SubmissionRow,
 } from "../../api/target/types";
 
-import { ApiError } from "../../api/target/client";
+import {
+  ApiError,
+  type SubmissionSort,
+} from "../../api/target/client";
+
+const PAGE_SIZE = 20;
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError
@@ -39,7 +49,11 @@ function formatDate(value: string): string {
   }).format(date);
 }
 
-function ScoreCell({ score }: { score: Score }) {
+function ScoreCell({
+  score,
+}: {
+  score: Score;
+}) {
   if (score.status === "pending") {
     return (
       <span className="text-muted">
@@ -101,15 +115,50 @@ type PendingReset = {
   label: string;
 };
 
+function readPage(value: string | null): number {
+  if (!value || !/^[1-9]\d*$/.test(value)) {
+    return 1;
+  }
+
+  const number = Number(value);
+
+  return Number.isSafeInteger(number)
+    ? number
+    : 1;
+}
+
+function readSort(
+  value: string | null,
+): SubmissionSort {
+  return value === "ai"
+    ? "ai"
+    : "similarity";
+}
+
 export function AssignmentPage() {
   const { assignmentId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] =
+    useSearchParams();
+
+  const sort = readSort(
+    searchParams.get("sort"),
+  );
+
+  const page = readPage(
+    searchParams.get("page"),
+  );
 
   const assignmentQuery =
     useAssignment(assignmentId);
 
   const submissionsQuery =
-    useSubmissions(assignmentId);
+    useSubmissions(
+      assignmentId,
+      sort,
+      page,
+      PAGE_SIZE,
+    );
 
   const assignmentsQuery =
     useAssignments();
@@ -155,17 +204,57 @@ export function AssignmentPage() {
   const [notice, setNotice] =
     useState("");
 
-  const assignment =
-    assignmentQuery.data;
-
-  const submissions =
-    submissionsQuery.data;
+  const assignment = assignmentQuery.data;
+  const submissions = submissionsQuery.data;
 
   const availableSources = (
     assignmentsQuery.data ?? []
   ).filter(
     (item) => item.id !== assignmentId,
   );
+
+  function changeSort(value: SubmissionSort) {
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(
+          previous,
+        );
+
+        if (value === "similarity") {
+          next.delete("sort");
+        } else {
+          next.set("sort", value);
+        }
+
+        next.delete("page");
+
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  function changePage(value: number) {
+    if (value < 1) {
+      return;
+    }
+
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(
+          previous,
+        );
+
+        if (value === 1) {
+          next.delete("page");
+        } else {
+          next.set("page", String(value));
+        }
+
+        return next;
+      },
+    );
+  }
 
   async function copyLink() {
     if (!assignment?.submissionUrl) {
@@ -186,7 +275,9 @@ export function AssignmentPage() {
   }
 
   function beginEditingSources() {
-    if (!assignment) return;
+    if (!assignment) {
+      return;
+    }
 
     setSelectedSources([
       ...assignment.sourceAssignmentIds,
@@ -208,7 +299,9 @@ export function AssignmentPage() {
   }
 
   async function saveSources() {
-    if (!assignmentId) return;
+    if (!assignmentId) {
+      return;
+    }
 
     try {
       await updateSources.mutateAsync({
@@ -222,12 +315,14 @@ export function AssignmentPage() {
         "Задания-источники обновлены.",
       );
     } catch {
-      // Сообщение из API выводится ниже.
+      // Ошибка отображается ниже.
     }
   }
 
   async function removeAssignment() {
-    if (!assignmentId) return;
+    if (!assignmentId) {
+      return;
+    }
 
     try {
       await deleteAssignment.mutateAsync(
@@ -238,7 +333,7 @@ export function AssignmentPage() {
         replace: true,
       });
     } catch {
-      // Сообщение из API выводится ниже.
+      // Ошибка отображается ниже.
     }
   }
 
@@ -257,13 +352,11 @@ export function AssignmentPage() {
       });
 
       setPendingReset(null);
-
       setNotice(
         "Повторная сдача разрешена. Уже принятая работа сохранена.",
       );
     } catch {
-      // В том числе конфликт 409
-      // отображается в блоке подтверждения.
+      // Ошибка отображается в подтверждении.
     }
   }
 
@@ -310,12 +403,9 @@ export function AssignmentPage() {
     );
   }
 
-  const total =
-    assignment.submissionCount;
-
+  const total = assignment.submissionCount;
   const completed =
     assignment.analysis.completed;
-
   const failed =
     assignment.analysis.failed;
 
@@ -323,6 +413,12 @@ export function AssignmentPage() {
     total - completed,
     0,
   );
+
+  const pageCount = submissions
+    ? Math.ceil(
+        submissions.total / PAGE_SIZE,
+      )
+    : 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -335,7 +431,6 @@ export function AssignmentPage() {
             >
               Задания
             </Link>
-
             {" / "}
             {assignment.title}
           </nav>
@@ -390,10 +485,7 @@ export function AssignmentPage() {
       )}
 
       {notice && (
-        <div
-          role="status"
-          className="panel p-4"
-        >
+        <div role="status" className="panel p-4">
           {notice}
         </div>
       )}
@@ -458,9 +550,7 @@ export function AssignmentPage() {
                           source.id,
                         )}
                         onChange={() =>
-                          toggleSource(
-                            source.id,
-                          )
+                          toggleSource(source.id)
                         }
                       />
 
@@ -559,9 +649,7 @@ export function AssignmentPage() {
             <button
               type="button"
               className="btn"
-              disabled={
-                deleteAssignment.isPending
-              }
+              disabled={deleteAssignment.isPending}
               onClick={() =>
                 setConfirmDelete(false)
               }
@@ -572,9 +660,7 @@ export function AssignmentPage() {
             <button
               type="button"
               className="btn border border-red-200 bg-red-700 px-5 py-2 text-white"
-              disabled={
-                deleteAssignment.isPending
-              }
+              disabled={deleteAssignment.isPending}
               onClick={() =>
                 void removeAssignment()
               }
@@ -625,9 +711,7 @@ export function AssignmentPage() {
             <button
               type="button"
               className="btn"
-              disabled={
-                resetAttempt.isPending
-              }
+              disabled={resetAttempt.isPending}
               onClick={() =>
                 setPendingReset(null)
               }
@@ -638,9 +722,7 @@ export function AssignmentPage() {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={
-                resetAttempt.isPending
-              }
+              disabled={resetAttempt.isPending}
               onClick={() =>
                 void confirmResetAttempt()
               }
@@ -658,17 +740,14 @@ export function AssignmentPage() {
           <span>
             Работ: <strong>{total}</strong>
           </span>
-
           <span>
             Проанализировано:{" "}
             <strong>{completed}</strong>
           </span>
-
           <span>
             В анализе:{" "}
             <strong>{processing}</strong>
           </span>
-
           <span>
             Ошибки:{" "}
             <strong className="text-red-700">
@@ -682,18 +761,43 @@ export function AssignmentPage() {
             type="checkbox"
             checked={showNames}
             onChange={(event) =>
-              setShowNames(
-                event.target.checked,
-              )
+              setShowNames(event.target.checked)
             }
             className="h-4 w-4"
           />
-
           Показать ФИО
         </label>
       </section>
 
       <section className="panel overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-4">
+          <label
+            htmlFor="submission-sort"
+            className="font-medium"
+          >
+            Сортировка работ
+          </label>
+
+          <select
+            id="submission-sort"
+            aria-label="Сортировка работ"
+            className="field w-full max-w-[260px]"
+            value={sort}
+            onChange={(event) =>
+              changeSort(
+                event.target.value as SubmissionSort,
+              )
+            }
+          >
+            <option value="similarity">
+              По сходству (Structsim)
+            </option>
+            <option value="ai">
+              По AI-оценке
+            </option>
+          </select>
+        </div>
+
         {submissionsQuery.isPending && (
           <div
             role="status"
@@ -731,7 +835,7 @@ export function AssignmentPage() {
         )}
 
         {submissionsQuery.isSuccess &&
-          submissions?.items.length === 0 && (
+          submissions?.total === 0 && (
             <div className="p-10 text-center">
               <h2 className="mb-2 text-lg">
                 Работы ещё не сданы
@@ -746,51 +850,47 @@ export function AssignmentPage() {
 
         {submissionsQuery.isSuccess &&
           submissions &&
+          submissions.total > 0 &&
+          submissions.items.length === 0 && (
+            <div className="p-10 text-center">
+              <h2 className="mb-2 text-lg">
+                На этой странице работ нет
+              </h2>
+
+              <button
+                type="button"
+                className="btn btn-primary mt-3"
+                onClick={() => changePage(1)}
+              >
+                К первой странице
+              </button>
+            </div>
+          )}
+
+        {submissionsQuery.isSuccess &&
+          submissions &&
           submissions.items.length > 0 && (
             <>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-sunk text-muted">
                     <tr>
-                      <th
-                        scope="col"
-                        className="th"
-                      >
+                      <th scope="col" className="th">
                         #
                       </th>
-
-                      <th
-                        scope="col"
-                        className="th"
-                      >
+                      <th scope="col" className="th">
                         Работа
                       </th>
-
-                      <th
-                        scope="col"
-                        className="th"
-                      >
+                      <th scope="col" className="th">
                         Сходство
                       </th>
-
-                      <th
-                        scope="col"
-                        className="th"
-                      >
+                      <th scope="col" className="th">
                         ИИ-генерация
                       </th>
-
-                      <th
-                        scope="col"
-                        className="th"
-                      >
+                      <th scope="col" className="th">
                         Сдано
                       </th>
-
-                      <th
-                        scope="col"
-                        className="th"
-                      >
+                      <th scope="col" className="th">
                         Действие
                       </th>
                     </tr>
@@ -802,10 +902,13 @@ export function AssignmentPage() {
                         item: SubmissionRow,
                         index: number,
                       ) => {
+                        const number =
+                          (page - 1) * PAGE_SIZE +
+                          index +
+                          1;
+
                         const label =
-                          `A-${String(
-                            index + 1,
-                          ).padStart(2, "0")}`;
+                          `A-${String(number).padStart(2, "0")}`;
 
                         return (
                           <tr
@@ -813,7 +916,7 @@ export function AssignmentPage() {
                             className="border-b border-line last:border-0 hover:bg-sunk"
                           >
                             <td className="td text-muted">
-                              {index + 1}
+                              {number}
                             </td>
 
                             <td className="td">
@@ -837,9 +940,7 @@ export function AssignmentPage() {
 
                             <td className="td">
                               <ScoreCell
-                                score={
-                                  item.similarity
-                                }
+                                score={item.similarity}
                               />
                             </td>
 
@@ -882,10 +983,44 @@ export function AssignmentPage() {
                 </table>
               </div>
 
-              <div className="border-t border-line px-4 py-3 text-right text-xs text-muted">
-                Показано{" "}
-                {submissions.items.length}{" "}
-                из {submissions.total}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-xs text-muted">
+                <span>
+                  Показано{" "}
+                  {submissions.items.length} из{" "}
+                  {submissions.total}
+                </span>
+
+                <nav
+                  aria-label="Страницы работ"
+                  className="flex items-center gap-3"
+                >
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={page <= 1}
+                    onClick={() =>
+                      changePage(page - 1)
+                    }
+                  >
+                    Назад
+                  </button>
+
+                  <span>
+                    Страница {page} из{" "}
+                    {Math.max(pageCount, 1)}
+                  </span>
+
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={page >= pageCount}
+                    onClick={() =>
+                      changePage(page + 1)
+                    }
+                  >
+                    Далее
+                  </button>
+                </nav>
               </div>
             </>
           )}

@@ -8,7 +8,6 @@ import {
 
 import { cleanup } from "@testing-library/react";
 import { setupServer } from "msw/node";
-
 import {
   afterAll,
   afterEach,
@@ -32,6 +31,10 @@ import {
   studentHandlers,
   resetMockStudentSubmissions,
 } from "../mocks/student-handlers";
+
+import {
+  crossAssignmentHandlers,
+} from "../mocks/cross-assignment-handlers";
 
 import {
   studentWorkReadHandlers,
@@ -74,6 +77,7 @@ export const server = setupServer(
   ...authHandlers,
   ...assignmentWriteHandlers,
   ...studentHandlers,
+  ...crossAssignmentHandlers,
   ...studentWorkReadHandlers,
   ...targetHandlers,
   ...handlers,

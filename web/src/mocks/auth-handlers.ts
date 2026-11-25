@@ -3,7 +3,7 @@ import { delay, http, HttpResponse } from "msw";
 
 type Role = "teacher" | "student";
 
-interface MockUser {
+export interface MockUser {
   id: string;
   fullName: string;
   role: Role;
@@ -61,6 +61,11 @@ function createUserId(): string {
   const id = nextUserId++;
 
   return `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`;
+}
+
+export function getMockCurrentUser():
+  MockUser | null {
+  return currentUser;
 }
 
 export function resetMockAuth() {
@@ -125,7 +130,7 @@ export const authHandlers = [
 
     const user: MockUser = {
       id: createUserId(),
-      fullName,
+      fullName: fullName.trim(),
       role,
     };
 

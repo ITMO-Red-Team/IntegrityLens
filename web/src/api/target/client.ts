@@ -13,6 +13,8 @@ import type {
 const BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) || "";
 
+export type SubmissionSort = "similarity" | "ai";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -180,10 +182,22 @@ export const api = {
       },
     ),
 
-  listSubmissions: (assignmentId: string) =>
-    apiRequest<SubmissionList>(
-      `/assignments/${enc(assignmentId)}/submissions`,
-    ),
+  listSubmissions: (
+    assignmentId: string,
+    sort: SubmissionSort = "similarity",
+    page = 1,
+    pageSize = 20,
+  ) => {
+    const params = new URLSearchParams({
+      sort,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    return apiRequest<SubmissionList>(
+      `/assignments/${enc(assignmentId)}/submissions?${params.toString()}`,
+    );
+  },
 
   getSubmission: (
     assignmentId: string,

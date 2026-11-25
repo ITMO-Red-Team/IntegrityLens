@@ -207,20 +207,16 @@ function ProtectedLayout({
   );
 }
 
-function Placeholder({
-  title,
-}: {
-  title: string;
-}) {
+function StudentHome() {
   return (
-    <section className="panel p-8">
-      <h1 className="mb-3 text-2xl">
-        {title}
+    <section className="panel mx-auto max-w-2xl p-8">
+      <h1 className="mb-3 text-2xl font-semibold">
+        Моя работа
       </h1>
 
       <p className="text-muted">
-        Следующим шагом реализуем
-        эту страницу по макету Miro.
+        Чтобы сдать работу, откройте ссылку на задание от преподавателя.
+        Если у вас нет ссылки, попросите преподавателя прислать её.
       </p>
     </section>
   );
@@ -283,9 +279,7 @@ export const routes: RouteObject[] = [
     children: [
       {
         path: "/student",
-        element: (
-          <Placeholder title="Моя работа" />
-        ),
+        element: <StudentHome />,
       },
       {
         path: "/submit/:token",

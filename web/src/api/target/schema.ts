@@ -388,7 +388,7 @@ export interface components {
             /** Format: date-time */
             submittedAt: string;
         };
-        /** @description Независимая оценка метода. Для Structsim: pending до завершения всех требуемых пар, затем failed при любой ошибке, иначе максимум успешных пар. Без кандидатов — not_applicable. AI имеет собственное состояние и не зависит от Structsim. */
+        /** @description Независимая оценка метода. Structsim ожидает завершения всех пар и исключает неразобранных кандидатов из максимума по успешным парам. Без кандидатов для сравнения — not_applicable. Ошибка разбора самой сдачи или другой сбой анализа дают failed. AI рассчитывается отдельно. */
         Score: {
             /** @enum {string} */
             status: "ok" | "pending" | "failed" | "not_applicable";

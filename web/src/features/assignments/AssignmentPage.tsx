@@ -63,10 +63,6 @@ function ScoreCell({
   }
 
   if (score.status === "failed") {
-    const label =
-      score.reason?.code === "OTHER_SUBMISSION_NOT_PARSED"
-        ? "Ошибка в другой работе"
-        : "Ошибка";
     return (
       <span
         className="text-red-700"
@@ -75,7 +71,7 @@ function ScoreCell({
           "Ошибка анализа"
         }
       >
-        {label}
+        Ошибка
       </span>
     );
   }

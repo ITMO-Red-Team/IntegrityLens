@@ -23,8 +23,10 @@ class AnalysisRead {
                 select a.id as assignment_id,
                     case when sim.id is null then 'not_applicable'
                          when sim.status in ('queued', 'running') then 'pending'
-                         when sim.status = 'done' and pairs.ok then 'ok'
-                         else 'failed' end as sim_status,
+                         when sim.status <> 'done' or pairs.blocked or not pairs.has_pairs then 'failed'
+                         when pairs.has_score then 'ok'
+                         when pairs.legacy_parse_failure then 'failed'
+                         else 'not_applicable' end as sim_status,
                     case when ai.id is null or ai.status in ('queued', 'running') then 'pending'
                          when ai.status = 'done' and result.score is not null then 'ok'
                          else 'failed' end as ai_status
@@ -34,7 +36,11 @@ class AnalysisRead {
                 left join analysis_runs sim on sim.assignment_id = a.id and sim.revision = a.similarity_revision
                     and sim.method = 'structsim'
                 left join lateral (
-                    select count(*) > 0 and count(p.value) = count(*) as ok
+                    select count(*) > 0 as has_pairs, count(p.value) > 0 as has_score,
+                        count(*) filter (where p.reason_code = 'NOT_PARSED') > 0 as legacy_parse_failure,
+                        count(*) filter (where p.reason_code <> 'NOT_PARSED'
+                            and (p.reason_code <> 'NOT_PARSED_A' or p.a = s.id)
+                            and (p.reason_code <> 'NOT_PARSED_B' or p.b = s.id)) > 0 as blocked
                     from similarity_results p
                     where p.run_id = sim.id and (p.a = s.id or p.b = s.id)
                 ) pairs on true
@@ -57,12 +63,14 @@ class AnalysisRead {
                 select s.id, s.student_id, u.full_name, s.submitted_at,
                     case when sim.id is null then 'not_applicable'
                          when sim.status in ('queued', 'running') then 'pending'
-                         when sim.status = 'done' and pairs.reason is null and pairs.value is not null then 'ok'
-                         else 'failed' end as sim_status,
+                         when sim.status <> 'done' or pairs.own_parse_failure
+                             or pairs.other_reason is not null or not pairs.has_pairs then 'failed'
+                         when pairs.value is not null then 'ok'
+                         when pairs.legacy_parse_failure then 'failed'
+                         else 'not_applicable' end as sim_status,
                     case when pairs.own_parse_failure then 'NOT_PARSED'
-                         when pairs.peer_parse_failure or (pairs.legacy_parse_failure and pairs.value is not null)
-                             then 'OTHER_SUBMISSION_NOT_PARSED'
-                         when pairs.legacy_parse_failure and exists (
+                         when pairs.other_reason is not null then pairs.other_reason
+                         when pairs.legacy_parse_failure and pairs.value is null and exists (
                              select 1
                              from similarity_results failed_pair
                              join similarity_results scored_pair on scored_pair.run_id = failed_pair.run_id
@@ -73,7 +81,7 @@ class AnalysisRead {
                                  and s.id in (failed_pair.a, failed_pair.b)
                          ) then 'NOT_PARSED'
                          when pairs.legacy_parse_failure then 'PAIR_NOT_PARSED'
-                         else coalesce(pairs.reason, sim.error_code, 'RESULT_MISSING') end as sim_reason,
+                         else coalesce(sim.error_code, 'RESULT_MISSING') end as sim_reason,
                     pairs.value as sim_value,
                     case when ai.id is null or ai.status in ('queued', 'running') then 'pending'
                          when ai.status = 'done' and result.score is not null then 'ok'
@@ -87,12 +95,12 @@ class AnalysisRead {
                 left join analysis_runs sim on sim.assignment_id = a.id and sim.revision = a.similarity_revision
                     and sim.method = 'structsim'
                 left join lateral (
-                    select max(p.value) as value, min(p.reason_code) as reason,
+                    select max(p.value) as value, count(*) > 0 as has_pairs,
+                        min(p.reason_code) filter (where p.reason_code not in
+                            ('NOT_PARSED', 'NOT_PARSED_A', 'NOT_PARSED_B', 'NOT_PARSED_BOTH')) as other_reason,
                         bool_or(p.reason_code = 'NOT_PARSED_BOTH'
                             or (p.reason_code = 'NOT_PARSED_A' and p.a = s.id)
                             or (p.reason_code = 'NOT_PARSED_B' and p.b = s.id)) as own_parse_failure,
-                        bool_or((p.reason_code = 'NOT_PARSED_A' and p.b = s.id)
-                            or (p.reason_code = 'NOT_PARSED_B' and p.a = s.id)) as peer_parse_failure,
                         bool_or(p.reason_code = 'NOT_PARSED') as legacy_parse_failure
                     from similarity_results p
                     where p.run_id = sim.id and (p.a = s.id or p.b = s.id)

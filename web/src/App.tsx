@@ -26,6 +26,10 @@ import {
 } from "./features/compare/ComparePage";
 
 import { AuthPage } from "./features/auth/AuthPage";
+import { AssignmentsPage } from "./features/assignments/AssignmentsPage";
+import { CreateAssignmentPage } from "./features/assignments/CreateAssignmentPage";
+import { AssignmentCreatedPage } from "./features/assignments/AssignmentCreatedPage";
+
 import { authApi } from "./api/target/auth";
 import { ApiError } from "./api/target/client";
 
@@ -174,7 +178,19 @@ export const routes: RouteObject[] = [
     children: [
       {
         path: "/assignments",
-        element: <Placeholder title="Мои задания" />,
+        element: <AssignmentsPage />,
+      },
+      {
+        path: "/assignments/new",
+        element: <CreateAssignmentPage />,
+      },
+      {
+        path: "/assignments/:assignmentId/created",
+        element: <AssignmentCreatedPage />,
+      },
+      {
+        path: "/assignments/:assignmentId",
+        element: <Placeholder title="Задание" />,
       },
     ],
   },
@@ -188,7 +204,8 @@ export const routes: RouteObject[] = [
     ],
   },
 
-  // Сохраняем старые экраны до завершения миграции.
+  // Старые экраны оставляем доступными
+  // до завершения перехода на новый API.
   {
     element: <Layout />,
     children: [
@@ -196,7 +213,10 @@ export const routes: RouteObject[] = [
         index: true,
         element: <Navigate replace to="/login" />,
       },
-      { path: "upload", element: <UploadPage /> },
+      {
+        path: "upload",
+        element: <UploadPage />,
+      },
       {
         path: "batches/:batchId",
         element: <BatchPage />,

@@ -20,6 +20,10 @@ import {
   authHandlers,
   resetMockAuth,
 } from "../mocks/auth-handlers";
+import {
+  assignmentWriteHandlers,
+  resetMockAssignments,
+} from "../mocks/assignment-write-handlers";
 import { targetHandlers } from "../mocks/target-handlers";
 
 const NativeFormData = (
@@ -52,6 +56,7 @@ globalThis.Request = class extends NativeRequest {
 
 export const server = setupServer(
   ...authHandlers,
+  ...assignmentWriteHandlers,
   ...targetHandlers,
   ...handlers,
 );
@@ -66,6 +71,7 @@ afterEach(() => {
   cleanup();
   server.resetHandlers();
   resetMockAuth();
+  resetMockAssignments();
   resetDb();
 });
 

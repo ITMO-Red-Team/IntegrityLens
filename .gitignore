@@ -14,3 +14,6 @@ reports/
 site/
 .venv-docs/
 .tools/
+# Browser integration test artifacts
+web/playwright-report/
+web/test-results/

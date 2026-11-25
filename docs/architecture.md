@@ -86,8 +86,8 @@ Backend вычисляет сходство работы как максимум
 
 ## Развёртывание
 
-Docker Compose для backend запускает `api`, `postgres`, `minio`,
-`worker-structsim` и `worker-ai`. Frontend подключается отдельно. Служебный контейнер `minio-init` создаёт bucket.
+Общий Docker Compose запускает `web`, `api`, `postgres`, `minio`,
+`worker-structsim` и `worker-ai`. Frontend проксирует `/api` в backend. Служебный контейнер `minio-init` создаёт bucket.
 PostgreSQL и MinIO используют постоянные тома. Настройки и секреты передаются
 через окружение. Модель AI поставляется локально вместе с образом или артефактами.
 

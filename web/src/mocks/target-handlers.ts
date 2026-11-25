@@ -26,8 +26,73 @@ const error = (
 const notFound = () =>
   error(404, "NOT_FOUND", "Объект не найден");
 
+const SAMPLE_SOURCES = [
+  `import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class BankTransfer {
+    private final ExecutorService pool =
+        Executors.newFixedThreadPool(4);
+
+    public void transfer(Account from, Account to, long amount) {
+        Account first = from.getId() < to.getId() ? from : to;
+        Account second = first == from ? to : from;
+        synchronized (first) {
+            synchronized (second) {
+                if (from.getBalance() < amount) {
+                    throw new IllegalStateException("Недостаточно средств");
+                }
+                from.withdraw(amount);
+                to.deposit(amount);
+            }
+        }
+    }
+}
+`,
+  `import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class MoneyService {
+    private final ExecutorService executor =
+        Executors.newFixedThreadPool(4);
+
+    public void move(Account src, Account dst, long value) {
+        Account a = src.getId() < dst.getId() ? src : dst;
+        Account b = a == src ? dst : src;
+        synchronized (a) {
+            synchronized (b) {
+                if (src.getBalance() < value) {
+                    throw new IllegalStateException("Мало денег на счёте");
+                }
+                src.withdraw(value);
+                dst.deposit(value);
+            }
+        }
+    }
+}
+`,
+];
+
+function getMockSource(
+  submissionId: string,
+): string | undefined {
+  const submissions = Object.values(mockSubmissions)
+    .flatMap((list) => list.items);
+
+  const index = submissions.findIndex(
+    (item) => item.submissionId === submissionId,
+  );
+
+  if (index < 0) {
+    return undefined;
+  }
+
+  return SAMPLE_SOURCES[
+    index % SAMPLE_SOURCES.length
+  ];
+}
+
 export const targetHandlers = [
-  // Получение текущего пользователя
   http.get("*/api/auth/me", async () => {
     await latency();
 
@@ -38,7 +103,6 @@ export const targetHandlers = [
     );
   }),
 
-  // Получение списка заданий
   http.get("*/api/assignments", async ({ request }) => {
     await latency();
 
@@ -61,7 +125,6 @@ export const targetHandlers = [
     return HttpResponse.json(mockAssignments);
   }),
 
-  // Получение конкретного задания
   http.get(
     "*/api/assignments/:assignmentId",
     async ({ params }) => {
@@ -86,7 +149,6 @@ export const targetHandlers = [
     },
   ),
 
-  // Получение списка сдач студентов
   http.get(
     "*/api/assignments/:assignmentId/submissions",
     async ({ params, request }) => {
@@ -142,7 +204,10 @@ export const targetHandlers = [
 
         if (aValue !== null && bValue !== null) {
           const difference = bValue - aValue;
-          if (difference !== 0) return difference;
+
+          if (difference !== 0) {
+            return difference;
+          }
         }
 
         return a.submissionId.localeCompare(b.submissionId);
@@ -159,7 +224,6 @@ export const targetHandlers = [
     },
   ),
 
-  // Получение детальной информации о сдаче
   http.get(
     "*/api/assignments/:assignmentId/submissions/:submissionId",
     async ({ params }) => {
@@ -187,7 +251,6 @@ export const targetHandlers = [
     },
   ),
 
-  // Получение результата сравнения пары
   http.get(
     "*/api/assignments/:assignmentId/pairs/:a/:b",
     async ({ params, request }) => {
@@ -225,6 +288,27 @@ export const targetHandlers = [
       return HttpResponse.json(
         createMockPair(a, b, scenario),
       );
+    },
+  ),
+
+  http.get(
+    "*/api/submissions/:submissionId/source",
+    async ({ params }) => {
+      const submissionId = String(params.submissionId);
+      const source = getMockSource(submissionId);
+
+      if (source === undefined) {
+        return undefined;
+      }
+
+      await latency();
+
+      return new HttpResponse(source, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+      });
     },
   ),
 ];

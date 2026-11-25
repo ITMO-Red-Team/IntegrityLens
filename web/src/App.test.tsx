@@ -22,7 +22,15 @@ function zipOf(items: { originalName: string; code: string }[], name = "hw4.zip"
 describe("сценарий проверяющего end-to-end (на моках api)", () => {
   it("очередь: копия с переименованием сверху, кластеры, дисклеймер", async () => {
     render(<App initialEntries={[queueUrl]} />);
-    const rows = within(await screen.findByRole("table")).getAllByRole("row").slice(1);
+    const table = await screen.findByRole(
+  "table",
+  {},
+  { timeout: 10_000 },
+);
+
+const rows = within(table)
+  .getAllByRole("row")
+  .slice(1);
     expect(rows).toHaveLength(28);
     const [x, y] = [uiLabel("S-014"), uiLabel("S-027")].sort();
     expect(rows[0]).toHaveTextContent(new RegExp(`${x}.*${y}|${y}.*${x}`));

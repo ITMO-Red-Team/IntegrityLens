@@ -1,6 +1,6 @@
 
-import type { ApiErrorBody } from "./types";
 import type {
+  ApiErrorBody,
   User,
   Assignment,
   AssignmentSummary,
@@ -10,7 +10,10 @@ import type {
   PairResult,
 } from "./types";
 
-const BASE = (import.meta.env.VITE_API_BASE as string | undefined) || "";
+const BASE =
+  (import.meta.env.VITE_API_BASE as string | undefined) || "";
+
+export type SubmissionSort = "similarity" | "ai";
 
 export class ApiError extends Error {
   constructor(
@@ -60,6 +63,7 @@ async function checkResponse(
       );
     }
   } catch {
+    // Для HTTP-ошибки без JSON используем общий текст.
   }
 
   throw error;
@@ -94,7 +98,8 @@ export async function apiTextRequest(
 
   await checkResponse(response);
 
-  return response.text();
+  // Keep a UTF-8 BOM: AI ranges are byte offsets in the original file.
+  return new TextDecoder("utf-8", { ignoreBOM: true }).decode(await response.arrayBuffer());
 }
 
 export async function apiVoidRequest(
@@ -137,16 +142,63 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  updateAssignmentSources: (
+    assignmentId: string,
+    sourceAssignmentIds: string[],
+  ) =>
+    apiRequest<Assignment>(
+      `/assignments/${enc(assignmentId)}/sources`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sourceAssignmentIds,
+        }),
+      },
+    ),
+
   deleteAssignment: (assignmentId: string) =>
     apiVoidRequest(
       `/assignments/${enc(assignmentId)}`,
       { method: "DELETE" },
     ),
 
-  listSubmissions: (assignmentId: string) =>
-    apiRequest<SubmissionList>(
-      `/assignments/${enc(assignmentId)}/submissions`,
+  resetStudentAttempt: (
+    assignmentId: string,
+    studentId: string,
+    expectedSubmissionId: string,
+  ) =>
+    apiVoidRequest(
+      `/assignments/${enc(assignmentId)}/students/${enc(studentId)}/reset`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          expectedSubmissionId,
+        }),
+      },
     ),
+
+  listSubmissions: (
+    assignmentId: string,
+    sort: SubmissionSort = "similarity",
+    page = 1,
+    pageSize = 20,
+  ) => {
+    const params = new URLSearchParams({
+      sort,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    return apiRequest<SubmissionList>(
+      `/assignments/${enc(assignmentId)}/submissions?${params.toString()}`,
+    );
+  },
 
   getSubmission: (
     assignmentId: string,

@@ -1,6 +1,6 @@
 # Инфраструктура
 
-Compose запускает API, PostgreSQL, MinIO и воркеры Structsim и AI. Для v2 используются чистые тома PostgreSQL и MinIO. Имя проекта по умолчанию — `integritylens-v2`.
+Compose запускает frontend, API, PostgreSQL, MinIO и воркеры Structsim и AI. Для v2 используются чистые тома PostgreSQL и MinIO. Имя проекта по умолчанию — `integritylens-v2`.
 
 Передайте настройки через окружение или отдельный `.env`. Для ссылок сдачи задайте `INTEGRITYLENS_PUBLIC_BASE_URL`. По умолчанию API доступен на `127.0.0.1:8080`. На сервере разместите HTTPS reverse proxy перед API, чтобы браузер отправлял Secure-cookie.
 
@@ -35,3 +35,27 @@ API_PORT=18080 docker compose -p integritylens-check -f infra/docker-compose.yml
 ```sh
 docker compose -p integritylens-check -f infra/docker-compose.yml down -v
 ```
+
+## Проверка через браузер
+
+Frontend доступен по `http://localhost:3000`; `/api` проксируется в backend.
+В Docker-сборке моки отключены. Для другого порта задайте `WEB_PORT` и
+соответствующий `INTEGRITYLENS_PUBLIC_BASE_URL`, чтобы ссылки сдачи открывали frontend.
+На localhost браузер принимает Secure-cookie по HTTP; для внешнего стенда нужен HTTPS.
+
+После запуска Compose:
+
+```sh
+cd web
+npm ci
+npx playwright install chromium
+npm run test:e2e
+```
+
+Для другого адреса задайте `E2E_BASE_URL`. Тест создаёт отдельные аккаунты
+преподавателя и двух студентов, проходит сдачу, сравнение с источником,
+пересдачу и удаление задания. Он проверяет собранный frontend и настоящий API,
+PostgreSQL и MinIO, без MSW. На CI AI работает в режиме mock, Structsim — real.
+Отчёты и трассировки неудачных запусков сохраняются в `web/playwright-report`
+и `web/test-results`. Для проверки из Vite запустите `VITE_USE_MOCKS=false npm run dev`
+и укажите `INTEGRITYLENS_PUBLIC_BASE_URL=http://localhost:5173` у backend.

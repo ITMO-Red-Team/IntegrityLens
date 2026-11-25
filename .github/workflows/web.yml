@@ -59,7 +59,7 @@ jobs:
         run: docker build -t integritylens-web:ci .
 
       - name: Сохранить результаты тестов
-        if: always
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: web-test-reports

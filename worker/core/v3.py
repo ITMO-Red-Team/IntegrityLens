@@ -16,14 +16,14 @@ from .contract import InvalidInput, validate_schema
 from .engine import Stopwatch, merged_params, sources_of
 from .mock import _find_fragments
 
-CONTRACT = "integritylens.core/2"
-MOCK_VERSION = "structsim-mock/2"
+CONTRACT = "integritylens.core/3"
+MOCK_VERSION = "structsim-mock/3"
 IDENTITY = ("contract", "runId", "revision", "method", "methodVersion")
 
 
 def method_version():
     from .structsim import METHOD_VERSION
-    return f"{METHOD_VERSION}+core2+templates-{template_filter.version()}"
+    return f"{METHOD_VERSION}+core3+templates-{template_filter.version()}"
 
 
 def _targets(job):
@@ -37,20 +37,28 @@ def _expected_pairs(job):
 
 
 def validate_job(job):
-    validate_schema("job-v2", job)
+    validate_schema("job-v3", job)
     ids = [s["id"] for s in job["submissions"]]
     if len(set(ids)) != len(ids) or any(str(UUID(sid)) != sid for sid in ids) or not _targets(job):
         raise InvalidInput()
 
 
 def validate_result(job, result):
-    validate_schema("result-v2", result)
+    validate_schema("result-v3", result)
     if any(job[key] != result[key] for key in IDENTITY):
         raise ValueError("Result identity mismatch")
     pairs = [(p["a"], p["b"]) for p in result["pairs"]]
     if sorted(pairs) != _expected_pairs(job):
         raise ValueError("Result pair membership or coverage mismatch")
+    failed = [entry["id"] for entry in result["failedInputs"]]
+    if len(set(failed)) != len(failed) or not set(failed) <= {s["id"] for s in job["submissions"]}:
+        raise ValueError("Invalid failed input membership")
     for pair in result["pairs"]:
+        invalid_input = pair["a"] in failed or pair["b"] in failed
+        if invalid_input and (pair["value"] is not None or pair.get("reason", {}).get("code") != "NOT_PARSED"):
+            raise ValueError("A failed input must fail all its pairs")
+        if not invalid_input and pair.get("reason", {}).get("code") == "NOT_PARSED":
+            raise ValueError("A parse failure requires a failed input")
         if pair["value"] is None:
             if "reason" not in pair or pair["fragments"]:
                 raise ValueError("A failed pair requires a reason and empty fragments")
@@ -126,7 +134,8 @@ def run(input_dir, output_dir):
         else:
             pair = scored[a, b]
         pairs.append({"a": a, "b": b, **pair})
-    result = {**{key: job[key] for key in IDENTITY}, "params": params, "pairs": pairs}
+    result = {**{key: job[key] for key in IDENTITY}, "params": params, "pairs": pairs,
+              "failedInputs": [{"id": sid, "reason": {"code": "NOT_PARSED"}} for sid in sorted(failed)]}
     validate_result(job, result)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "result.json").write_text(json.dumps(result, allow_nan=False), encoding="utf-8")

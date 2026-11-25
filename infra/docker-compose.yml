@@ -86,7 +86,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-integritylens-local}
       INTEGRITYLENS_PUBLIC_BASE_URL: ${INTEGRITYLENS_PUBLIC_BASE_URL:-http://localhost:3000}
       MAINTENANCE_INTERVAL: ${MAINTENANCE_INTERVAL:-PT1M}
-      STRUCTSIM_METHOD_VERSION: ${STRUCTSIM_METHOD_VERSION:-structsim-0.3.0+semgrep-1.180.0+core2+templates-f1a1796c}
+      STRUCTSIM_METHOD_VERSION: ${STRUCTSIM_METHOD_VERSION:-structsim-0.3.0+semgrep-1.180.0+core3+templates-f1a1796c}
       AI_METHOD_VERSION: ${AI_METHOD_VERSION:-aicode-0.1.1+gigacheck-9fabe1503f+int2}
     ports:
       - '${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080'
@@ -112,7 +112,7 @@ services:
     environment:
       <<: *worker-env
       WORKER_METHOD: structsim
-      WORKER_METHOD_VERSION: ${STRUCTSIM_METHOD_VERSION:-structsim-0.3.0+semgrep-1.180.0+core2+templates-f1a1796c}
+      WORKER_METHOD_VERSION: ${STRUCTSIM_METHOD_VERSION:-structsim-0.3.0+semgrep-1.180.0+core3+templates-f1a1796c}
       CORE_ENGINE: ${STRUCTSIM_ENGINE:-real}
       MOCK_SCENARIO: ${STRUCTSIM_MOCK_SCENARIO:-success}
 

@@ -41,7 +41,7 @@ class Worker:
     def __init__(self):
         self.method = os.environ["WORKER_METHOD"]
         contract_module, self.engine_module = {
-            "structsim": ("worker.core.v2", "worker.core.v2"),
+            "structsim": ("worker.core.v3", "worker.core.v3"),
             "ai": ("worker.ai.contract", "worker.ai"),
         }[self.method]
         self.contract = importlib.import_module(contract_module)
@@ -230,6 +230,9 @@ class Worker:
                 raise LeaseLost()
             if self.method == "structsim":
                 with db.cursor() as cursor:
+                    cursor.executemany("""
+                        update analysis_run_inputs set error_code = %s where run_id = %s and submission_id = %s
+                        """, ((item["reason"]["code"], run["id"], item["id"]) for item in result["failedInputs"]))
                     cursor.executemany("""
                         insert into similarity_results(run_id, a, b, value, reason_code, details, fragments)
                         values (%s, %s, %s, %s, %s, %s, %s)

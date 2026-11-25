@@ -25,17 +25,24 @@ final class Models {
 
     record Reason(String code, String message) {}
 
-    record Score(String status, Double value, @JsonInclude(JsonInclude.Include.NON_NULL) Reason reason) {
+    record ComparisonCoverage(int successful, int skipped) {}
+
+    record Score(String status, Double value, @JsonInclude(JsonInclude.Include.NON_NULL) Reason reason,
+                 @JsonInclude(JsonInclude.Include.NON_NULL) ComparisonCoverage comparisons) {
+        Score withComparisons(int successful, int skipped) {
+            return new Score(status, value, reason, new ComparisonCoverage(successful, skipped));
+        }
+
         static Score ok(double value) {
-            return new Score("ok", value, null);
+            return new Score("ok", value, null, null);
         }
 
         static Score pending() {
-            return new Score("pending", null, null);
+            return new Score("pending", null, null, null);
         }
 
         static Score notApplicable() {
-            return new Score("not_applicable", null, null);
+            return new Score("not_applicable", null, null, null);
         }
 
         static Score failed(String code) {
@@ -44,7 +51,7 @@ final class Models {
                 case "RUN_TIMEOUT" -> "Истекло время анализа.";
                 default -> "Не удалось завершить анализ.";
             };
-            return new Score("failed", null, new Reason(code, message));
+            return new Score("failed", null, new Reason(code, message), null);
         }
     }
 

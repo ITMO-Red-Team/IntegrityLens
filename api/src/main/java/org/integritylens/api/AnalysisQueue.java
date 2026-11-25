@@ -94,7 +94,7 @@ class AnalysisQueue {
         int inserted = jdbc.update("""
                 with inputs as (%s)
                 insert into analysis_runs(id, method, contract_version, method_version, assignment_id, revision)
-                select ?, 'structsim', 'integritylens.core/2', ?, ?, ?
+                select ?, 'structsim', 'integritylens.core/3', ?, ?, ?
                 from inputs
                 having count(*) >= 2 and count(*) filter (where scope = 'target') >= 1
                 """.formatted(SNAPSHOT), assignment, assignment, run, structsimVersion, assignment, revision);

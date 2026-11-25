@@ -2,14 +2,29 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contract", "runId", "revision", "method", "methodVersion", "params", "pairs"],
+  "required": ["contract", "runId", "revision", "method", "methodVersion", "params", "pairs", "failedInputs"],
   "properties": {
-    "contract": {"const": "integritylens.core/2"},
+    "contract": {"const": "integritylens.core/3"},
     "runId": {"type": "string", "format": "uuid"},
     "revision": {"type": "integer", "minimum": 0},
     "method": {"const": "structsim"},
     "methodVersion": {"type": "string", "minLength": 1},
     "params": {"type": "object"},
+    "failedInputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "reason"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "reason": {
+            "type": "object", "additionalProperties": false, "required": ["code"],
+            "properties": {"code": {"const": "NOT_PARSED"}}
+          }
+        }
+      }
+    },
     "pairs": {
       "type": "array",
       "items": {

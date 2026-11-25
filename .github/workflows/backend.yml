@@ -57,6 +57,7 @@ jobs:
             web/test-results/
             web/playwright-report/
       - run: python infra/smoke_test.py
+      - run: python infra/smoke_partial_test.py
       - run: |
           AI_MOCK_SCENARIO=partial docker compose -p integritylens-ci -f infra/docker-compose.yml \
             up -d --no-deps --wait worker-ai

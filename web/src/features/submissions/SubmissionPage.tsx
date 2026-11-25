@@ -1,5 +1,6 @@
 
 import { useQuery } from "@tanstack/react-query";
+import { ComparisonNotice } from "./ComparisonNotice";
 import { Link, useParams } from "react-router-dom";
 
 import { api, ApiError } from "../../api/target/client";
@@ -51,6 +52,7 @@ function ScoreCard({
       <div className="font-mono text-2xl font-semibold">
         {scoreText(score)}
       </div>
+      <ComparisonNotice score={score} />
 
       {score.status === "failed" &&
         score.reason?.message && (

@@ -27,6 +27,7 @@ async function register(page: Page, email: string, role: "teacher" | "student", 
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Пароль", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Войти", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Выйти", exact: true })).toBeVisible();
 }
 
 async function createAssignment(page: Page, title: string, source?: string) {
@@ -135,6 +136,50 @@ test("real backend: registration, submissions, comparison, reset, sources and de
     await expect(teacher).toHaveURL(/\/login$/);
     expect((await teacher.request.get("/api/auth/me")).status()).toBe(401);
     expect(errors).toEqual([]);
+  } finally {
+    await Promise.allSettled(contexts.map(c => c.close()));
+  }
+});
+
+test("malformed Java only fails its own score and exposes skipped comparisons", async ({ browser, baseURL }) => {
+  const contexts = await Promise.all([1, 2, 3, 4].map(() => browser.newContext({ baseURL })));
+  for (const context of contexts) context.setDefaultTimeout(15_000);
+  const [teacher, first, second, invalid] = await Promise.all(contexts.map(c => c.newPage()));
+  const suffix = Date.now();
+  try {
+    await teacher.goto("/login");
+    await register(teacher, `bad-teacher-${suffix}@example.org`, "teacher", "Partial Teacher");
+    const assignment = await createAssignment(teacher, `Partial ${suffix}`);
+    const path = new URL(assignment.url).pathname;
+    for (const [index, page] of [first, second].entries()) {
+      await page.goto(assignment.link);
+      await register(page, `good-${index}-${suffix}@example.org`, "student", `Good Student ${index}`);
+      await submit(page);
+    }
+    await expect(teacher.getByRole("link", { name: /Открыть работу A-/ })).toHaveCount(2);
+    await expect.poll(async () => {
+      const rows = await (await teacher.request.get(`/api${path}/submissions`)).json();
+      return rows.items.every((row: { similarity: { status: string } }) => row.similarity.status === "ok");
+    }).toBe(true);
+    const before = await (await teacher.request.get(`/api${path}/submissions`)).json();
+    await invalid.goto(assignment.link);
+    await register(invalid, `invalid-${suffix}@example.org`, "student", "Invalid Student");
+    await submit(invalid, "Hello world!");
+    await expect(teacher.getByRole("link", { name: /Открыть работу A-/ })).toHaveCount(3);
+    await expect(teacher.getByRole("note").filter({ hasText: "Пропущено сравнений: 1" })).toHaveCount(2);
+    const after = await (await teacher.request.get(`/api${path}/submissions`)).json();
+    for (const row of before.items) {
+      const current = after.items.find((item: { submissionId: string }) => item.submissionId === row.submissionId);
+      expect(current.similarity).toEqual({ ...row.similarity, comparisons: { successful: 1, skipped: 1 } });
+    }
+    const broken = after.items.find((item: { fullName: string }) => item.fullName === "Invalid Student");
+    expect(broken.similarity.status).toBe("failed");
+    expect(broken.similarity.reason.code).toBe("NOT_PARSED");
+    await teacher.getByLabel("Показать ФИО", { exact: true }).check();
+    await teacher.getByRole("row").filter({ hasText: "Good Student 0" }).getByRole("link").click();
+    await expect(teacher.getByRole("heading", { name: "Работа", exact: true })).toBeVisible();
+    await expect(teacher.getByRole("note")).toHaveText("Пропущено сравнений: 1");
+    await teacher.screenshot({ path: test.info().outputPath("partial-comparisons.png"), fullPage: true });
   } finally {
     await Promise.allSettled(contexts.map(c => c.close()));
   }

@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["contract", "runId", "revision", "method", "methodVersion", "params", "submissions"],
   "properties": {
-    "contract": {"const": "integritylens.core/2"},
+    "contract": {"const": "integritylens.core/3"},
     "runId": {"type": "string", "format": "uuid"},
     "revision": {"type": "integer", "minimum": 0},
     "method": {"const": "structsim"},

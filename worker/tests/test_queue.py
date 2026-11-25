@@ -33,7 +33,7 @@ class QueueTest(unittest.TestCase):
         with self.worker.connect() as db:
             db.execute("""
                 insert into analysis_runs(id, method, contract_version, method_version, assignment_id, revision, max_attempts)
-                values (%s, 'structsim', 'integritylens.core/2', %s, %s, 0, %s)
+                values (%s, 'structsim', 'integritylens.core/3', %s, %s, 0, %s)
                 """, (run_id, self.worker.version, self.assignment, max_attempts))
         return run_id
 

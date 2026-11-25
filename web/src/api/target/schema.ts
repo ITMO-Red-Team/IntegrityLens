@@ -388,12 +388,19 @@ export interface components {
             /** Format: date-time */
             submittedAt: string;
         };
-        /** @description Независимая оценка метода. Для Structsim: pending до завершения всех требуемых пар, затем failed при любой ошибке, иначе максимум успешных пар. Без кандидатов — not_applicable. AI имеет собственное состояние и не зависит от Structsim. */
+        ComparisonCoverage: {
+            /** @description Число успешных пар, по которым рассчитан максимум. */
+            successful: number;
+            /** @description Число пар без оценки; их ошибки не приписываются корректной работе. */
+            skipped: number;
+        };
+        /** @description Независимая оценка метода. Structsim остаётся pending до завершения прогона. Ошибка разбора самой работы даёт failed. Для разобранной работы максимум считается по успешным парам; ошибки других работ не скрывают оценку. comparisons содержит число успешных и пропущенных сравнений в завершённой агрегированной оценке Structsim; skipped > 0 явно отмечается в UI. Без успешных сравнений разобранная работа получает not_applicable, value=null, включая случай, когда все кандидаты не разобрались. Сбой всего прогона даёт failed. У оценок пары и AI нет comparisons. AI имеет собственное состояние и не зависит от Structsim. */
         Score: {
             /** @enum {string} */
             status: "ok" | "pending" | "failed" | "not_applicable";
             /** @description Null except when status is ok. */
             value: number | null;
+            comparisons?: components["schemas"]["ComparisonCoverage"];
             /** @description Обязательна при failed; код ошибки и сообщение для пользователя. */
             reason?: {
                 code: string;

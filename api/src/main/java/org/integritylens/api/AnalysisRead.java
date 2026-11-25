@@ -20,11 +20,17 @@ class AnalysisRead {
     private static final String SCORES = """
             select a.id as assignment_id, s.id, s.student_id, u.full_name, s.submitted_at,
                 case when sim.id is null then 'not_applicable'
+                     when sim.contract_version <> 'integritylens.core/3' then 'pending'
                      when sim.status in ('queued', 'running') then 'pending'
-                     when sim.status = 'done' and pairs.reason is null and pairs.value is not null then 'ok'
+                     when sim.status = 'done' and own.error_code is not null then 'failed'
+                     when sim.status = 'done' and pairs.value is not null then 'ok'
+                     when sim.status = 'done' and pairs.skipped > 0 then 'not_applicable'
                      else 'failed' end as sim_status,
-                coalesce(pairs.reason, sim.error_code, 'RESULT_MISSING') as sim_reason,
+                coalesce(own.error_code, sim.error_code, 'RESULT_MISSING') as sim_reason,
                 pairs.value as sim_value,
+                sim.contract_version = 'integritylens.core/3' and sim.status = 'done'
+                    and own.submission_id is not null and own.error_code is null as sim_coverage,
+                pairs.successful as sim_successful, pairs.skipped as sim_skipped,
                 case when ai.id is null or ai.status in ('queued', 'running') then 'pending'
                      when ai.status = 'done' and result.score is not null then 'ok'
                      else 'failed' end as ai_status,
@@ -36,8 +42,10 @@ class AnalysisRead {
             join users u on u.id = s.student_id
             left join analysis_runs sim on sim.assignment_id = a.id and sim.revision = a.similarity_revision
                 and sim.method = 'structsim'
+            left join analysis_run_inputs own on own.run_id = sim.id and own.submission_id = s.id
             left join lateral (
-                select max(value) as value, min(reason_code) as reason from similarity_results p
+                select max(value) as value, count(value) as successful,
+                    count(*) filter (where value is null) as skipped from similarity_results p
                 where p.run_id = sim.id and (p.a = s.id or p.b = s.id)
             ) pairs on true
             left join analysis_runs ai on ai.submission_id = s.id and ai.method = 'ai' and ai.method_version = ?
@@ -166,12 +174,14 @@ class AnalysisRead {
     }
 
     private static Score score(ResultSet rs, String prefix) throws SQLException {
-        return switch (rs.getString(prefix + "_status")) {
+        Score result = switch (rs.getString(prefix + "_status")) {
             case "ok" -> Score.ok(rs.getDouble(prefix + "_value"));
             case "pending" -> Score.pending();
             case "not_applicable" -> Score.notApplicable();
             default -> Score.failed(rs.getString(prefix + "_reason"));
         };
+        return prefix.equals("sim") && rs.getBoolean("sim_coverage")
+                ? result.withComparisons(rs.getInt("sim_successful"), rs.getInt("sim_skipped")) : result;
     }
 
     private static Score storedScore(ResultSet rs) throws SQLException {

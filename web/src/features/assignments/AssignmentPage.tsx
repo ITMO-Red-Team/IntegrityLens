@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { ComparisonNotice } from "../submissions/ComparisonNotice";
 import {
   Link,
   useNavigate,
@@ -78,9 +79,10 @@ function ScoreCell({
 
   if (score.status === "not_applicable") {
     return (
-      <span className="text-muted">
-        Нет данных
-      </span>
+      <div>
+        <span className="text-muted">Нет данных</span>
+        <ComparisonNotice score={score} />
+      </div>
     );
   }
 
@@ -100,12 +102,12 @@ function ScoreCell({
         : "var(--c-low)";
 
   return (
-    <span
-      className="font-mono font-semibold"
-      style={{ color }}
-    >
-      {score.value.toFixed(2)}
-    </span>
+    <div>
+      <span className="font-mono font-semibold" style={{ color }}>
+        {score.value.toFixed(2)}
+      </span>
+      <ComparisonNotice score={score} />
+    </div>
   );
 }
 

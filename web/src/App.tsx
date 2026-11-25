@@ -30,6 +30,8 @@ import { AssignmentsPage } from "./features/assignments/AssignmentsPage";
 import { CreateAssignmentPage } from "./features/assignments/CreateAssignmentPage";
 import { AssignmentCreatedPage } from "./features/assignments/AssignmentCreatedPage";
 import { AssignmentPage } from "./features/assignments/AssignmentPage";
+import { SubmissionPage } from "./features/submissions/SubmissionPage";
+import { SubmissionPairPage } from "./features/submissions/SubmissionPairPage";
 
 import { authApi } from "./api/target/auth";
 import { ApiError } from "./api/target/client";
@@ -58,9 +60,11 @@ function ProtectedLayout({
   const { data: user, isPending, error } = useQuery({
     queryKey: AUTH_QUERY_KEY,
     queryFn: authApi.me,
-    retry: (count, error) =>
-      !(error instanceof ApiError && error.status === 401) &&
-      count < 1,
+    retry: (count, queryError) =>
+      !(
+        queryError instanceof ApiError &&
+        queryError.status === 401
+      ) && count < 1,
   });
 
   async function logout() {
@@ -87,7 +91,10 @@ function ProtectedLayout({
     );
   }
 
-  if (error instanceof ApiError && error.status === 401) {
+  if (
+    error instanceof ApiError &&
+    error.status === 401
+  ) {
     return <Navigate to="/login" replace />;
   }
 
@@ -196,6 +203,14 @@ export const routes: RouteObject[] = [
         path: "/assignments/:assignmentId",
         element: <AssignmentPage />,
       },
+      {
+        path: "/assignments/:assignmentId/submissions/:submissionId",
+        element: <SubmissionPage />,
+      },
+      {
+        path: "/assignments/:assignmentId/pairs/:a/:b",
+        element: <SubmissionPairPage />,
+      },
     ],
   },
   {
@@ -207,8 +222,6 @@ export const routes: RouteObject[] = [
       },
     ],
   },
-
-  // Старые экраны остаются доступными до миграции.
   {
     element: <Layout />,
     children: [

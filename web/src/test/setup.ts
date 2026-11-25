@@ -8,6 +8,7 @@ import {
 
 import { cleanup } from "@testing-library/react";
 import { setupServer } from "msw/node";
+
 import {
   afterAll,
   afterEach,
@@ -16,14 +17,26 @@ import {
 
 import { resetDb } from "../mocks/db";
 import { handlers } from "../mocks/handlers";
+
 import {
   authHandlers,
   resetMockAuth,
 } from "../mocks/auth-handlers";
+
 import {
   assignmentWriteHandlers,
   resetMockAssignments,
 } from "../mocks/assignment-write-handlers";
+
+import {
+  studentHandlers,
+  resetMockStudentSubmissions,
+} from "../mocks/student-handlers";
+
+import {
+  studentWorkReadHandlers,
+} from "../mocks/student-work-read-handlers";
+
 import { targetHandlers } from "../mocks/target-handlers";
 
 const NativeFormData = (
@@ -48,7 +61,10 @@ globalThis.Request = class extends NativeRequest {
     input: RequestInfo | URL,
     init?: RequestInit,
   ) {
-    const { signal: _signal, ...rest } = init ?? {};
+    const {
+      signal: _signal,
+      ...rest
+    } = init ?? {};
 
     super(input, rest);
   }
@@ -57,6 +73,8 @@ globalThis.Request = class extends NativeRequest {
 export const server = setupServer(
   ...authHandlers,
   ...assignmentWriteHandlers,
+  ...studentHandlers,
+  ...studentWorkReadHandlers,
   ...targetHandlers,
   ...handlers,
 );
@@ -72,6 +90,7 @@ afterEach(() => {
   server.resetHandlers();
   resetMockAuth();
   resetMockAssignments();
+  resetMockStudentSubmissions();
   resetDb();
 });
 

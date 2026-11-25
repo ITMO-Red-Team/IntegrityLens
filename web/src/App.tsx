@@ -30,13 +30,19 @@ import { AssignmentsPage } from "./features/assignments/AssignmentsPage";
 import { CreateAssignmentPage } from "./features/assignments/CreateAssignmentPage";
 import { AssignmentCreatedPage } from "./features/assignments/AssignmentCreatedPage";
 import { AssignmentPage } from "./features/assignments/AssignmentPage";
+
 import { SubmissionPage } from "./features/submissions/SubmissionPage";
 import { SubmissionPairPage } from "./features/submissions/SubmissionPairPage";
+import { StudentSubmissionPage } from "./features/student/StudentSubmissionPage";
 
 import { authApi } from "./api/target/auth";
 import { ApiError } from "./api/target/client";
 
-const AUTH_QUERY_KEY = ["target", "auth", "me"] as const;
+const AUTH_QUERY_KEY = [
+  "target",
+  "auth",
+  "me",
+] as const;
 
 const makeQueryClient = () =>
   new QueryClient({
@@ -57,7 +63,11 @@ function ProtectedLayout({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: user, isPending, error } = useQuery({
+  const {
+    data: user,
+    isPending,
+    error,
+  } = useQuery({
     queryKey: AUTH_QUERY_KEY,
     queryFn: authApi.me,
     retry: (count, queryError) =>
@@ -75,7 +85,9 @@ function ProtectedLayout({
         queryKey: ["target"],
       });
 
-      navigate("/login", { replace: true });
+      navigate("/login", {
+        replace: true,
+      });
     } catch {
       window.alert(
         "Не удалось выйти. Попробуйте ещё раз.",
@@ -95,19 +107,33 @@ function ProtectedLayout({
     error instanceof ApiError &&
     error.status === 401
   ) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
   }
 
   if (error) {
     return (
-      <div role="alert" className="p-8 text-center">
-        Не удалось проверить сессию. Обновите страницу.
+      <div
+        role="alert"
+        className="p-8 text-center"
+      >
+        Не удалось проверить сессию.
+        Обновите страницу.
       </div>
     );
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
   }
 
   if (user.role !== role) {
@@ -142,7 +168,9 @@ function ProtectedLayout({
             <button
               type="button"
               className="btn"
-              onClick={() => void logout()}
+              onClick={() =>
+                void logout()
+              }
             >
               Выйти
             </button>
@@ -169,7 +197,8 @@ function Placeholder({
       </h1>
 
       <p className="text-muted">
-        Следующим шагом реализуем эту страницу по макету Miro.
+        Следующим шагом реализуем
+        эту страницу по макету Miro.
       </p>
     </section>
   );
@@ -178,14 +207,26 @@ function Placeholder({
 export const routes: RouteObject[] = [
   {
     path: "/login",
-    element: <AuthPage key="login" mode="login" />,
+    element: (
+      <AuthPage
+        key="login"
+        mode="login"
+      />
+    ),
   },
   {
     path: "/register",
-    element: <AuthPage key="register" mode="register" />,
+    element: (
+      <AuthPage
+        key="register"
+        mode="register"
+      />
+    ),
   },
   {
-    element: <ProtectedLayout role="teacher" />,
+    element: (
+      <ProtectedLayout role="teacher" />
+    ),
     children: [
       {
         path: "/assignments",
@@ -214,11 +255,19 @@ export const routes: RouteObject[] = [
     ],
   },
   {
-    element: <ProtectedLayout role="student" />,
+    element: (
+      <ProtectedLayout role="student" />
+    ),
     children: [
       {
         path: "/student",
-        element: <Placeholder title="Моя работа" />,
+        element: (
+          <Placeholder title="Моя работа" />
+        ),
+      },
+      {
+        path: "/submit/:token",
+        element: <StudentSubmissionPage />,
       },
     ],
   },
@@ -227,7 +276,12 @@ export const routes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: <Navigate replace to="/login" />,
+        element: (
+          <Navigate
+            replace
+            to="/login"
+          />
+        ),
       },
       {
         path: "upload",
@@ -266,16 +320,22 @@ export function App({
 }: {
   initialEntries?: string[];
 }) {
-  const [queryClient] = useState(makeQueryClient);
+  const [queryClient] = useState(
+    makeQueryClient,
+  );
 
   const [router] = useState(() =>
     initialEntries
-      ? createMemoryRouter(routes, { initialEntries })
+      ? createMemoryRouter(routes, {
+          initialEntries,
+        })
       : createBrowserRouter(routes),
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider
+      client={queryClient}
+    >
       <RouterProvider router={router} />
     </QueryClientProvider>
   );

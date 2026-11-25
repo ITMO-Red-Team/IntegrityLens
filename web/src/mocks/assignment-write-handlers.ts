@@ -12,10 +12,24 @@ import {
   mockSubmissions,
 } from "./target-fixtures";
 
-const createdAssignments = new Map<string, Assignment>();
-const editedAssignments = new Map<string, Assignment>();
-const deletedAssignments = new Set<string>();
-const resetAttempts = new Set<string>();
+import {
+  getMockWork,
+  listMockSubmissionRows,
+  openMockWorkAttempt,
+  resetMockWorkStore,
+} from "./student-submission-store";
+
+const createdAssignments =
+  new Map<string, Assignment>();
+
+const editedAssignments =
+  new Map<string, Assignment>();
+
+const deletedAssignments =
+  new Set<string>();
+
+const resetAttempts =
+  new Set<string>();
 
 function apiError(
   status: number,
@@ -44,35 +58,95 @@ function isUuid(value: string): boolean {
   );
 }
 
-function originalAssignment(id: string): Assignment | undefined {
+function originalAssignment(
+  id: string,
+): Assignment | undefined {
   const original = mockAssignments.find(
-    (assignment) => assignment.id === id,
+    (assignment) =>
+      assignment.id === id,
   );
 
-  if (!original) return undefined;
+  if (!original) {
+    return undefined;
+  }
 
   return {
     ...original,
-    submissionUrl: `http://localhost:5173/submit/${original.id}`,
+    submissionUrl:
+      `http://localhost:5173/submit/${original.id}`,
     sourceAssignmentIds: [],
   };
 }
 
-function getAssignment(id: string): Assignment | undefined {
-  if (deletedAssignments.has(id)) {
+function getAssignment(
+  id: string,
+): Assignment | undefined {
+  if (
+    deletedAssignments.has(id)
+  ) {
     return undefined;
   }
 
-  return (
+  const assignment =
     createdAssignments.get(id) ??
     editedAssignments.get(id) ??
-    originalAssignment(id)
-  );
+    originalAssignment(id);
+
+  if (!assignment) {
+    return undefined;
+  }
+
+  if (!createdAssignments.has(id)) {
+    return assignment;
+  }
+
+  const rows =
+    listMockSubmissionRows(id);
+
+  return {
+    ...assignment,
+    submissionCount: rows.length,
+    analysis: {
+      completed: 0,
+      failed: 0,
+    },
+  };
+}
+
+export function getMockAssignmentByToken(
+  token: string,
+): Assignment | undefined {
+  if (
+    token.startsWith("mock-")
+  ) {
+    const id = token.slice(
+      "mock-".length,
+    );
+
+    if (
+      !createdAssignments.has(id)
+    ) {
+      return undefined;
+    }
+
+    return getAssignment(id);
+  }
+
+  if (
+    !originalAssignment(token)
+  ) {
+    return undefined;
+  }
+
+  return getAssignment(token);
 }
 
 function allAssignments(): AssignmentSummary[] {
   const ids = [
-    ...mockAssignments.map((assignment) => assignment.id),
+    ...mockAssignments.map(
+      (assignment) =>
+        assignment.id,
+    ),
     ...createdAssignments.keys(),
   ];
 
@@ -87,7 +161,7 @@ function allAssignments(): AssignmentSummary[] {
 function resetKey(
   assignmentId: string,
   studentId: string,
-) {
+): string {
   return `${assignmentId}:${studentId}`;
 }
 
@@ -96,113 +170,146 @@ export function resetMockAssignments() {
   editedAssignments.clear();
   deletedAssignments.clear();
   resetAttempts.clear();
+  resetMockWorkStore();
 }
 
 export const assignmentWriteHandlers = [
-  http.post("*/api/assignments", async ({ request }) => {
-    let body: unknown;
+  http.post(
+    "*/api/assignments",
+    async ({ request }) => {
+      let body: unknown;
 
-    try {
-      body = await request.json();
-    } catch {
-      return apiError(
-        422,
-        "VALIDATION_ERROR",
-        "Некорректные данные задания.",
+      try {
+        body = await request.json();
+      } catch {
+        return apiError(
+          422,
+          "VALIDATION_ERROR",
+          "Некорректные данные задания.",
+        );
+      }
+
+      if (!isRecord(body)) {
+        return apiError(
+          422,
+          "VALIDATION_ERROR",
+          "Проверьте заполнение полей.",
+        );
+      }
+
+      const {
+        title,
+        sourceAssignmentIds = [],
+      } = body;
+
+      if (
+        typeof title !== "string" ||
+        title.trim().length < 1 ||
+        title.trim().length > 200 ||
+        !Array.isArray(
+          sourceAssignmentIds,
+        ) ||
+        !sourceAssignmentIds.every(
+          (id): id is string =>
+            typeof id === "string" &&
+            isUuid(id),
+        ) ||
+        new Set(
+          sourceAssignmentIds,
+        ).size !==
+          sourceAssignmentIds.length
+      ) {
+        return apiError(
+          422,
+          "VALIDATION_ERROR",
+          "Проверьте заполнение полей.",
+        );
+      }
+
+      if (
+        sourceAssignmentIds.some(
+          (id) =>
+            !getAssignment(id),
+        )
+      ) {
+        return apiError(
+          404,
+          "NOT_FOUND",
+          "Задание-источник не найдено.",
+        );
+      }
+
+      const id = crypto.randomUUID();
+
+      const assignment: Assignment = {
+        id,
+        title: title.trim(),
+        createdAt:
+          new Date().toISOString(),
+        submissionCount: 0,
+        analysis: {
+          completed: 0,
+          failed: 0,
+        },
+        sourceAssignmentIds,
+        submissionUrl:
+          `${new URL(request.url).origin}/submit/mock-${id}`,
+      };
+
+      createdAssignments.set(
+        id,
+        assignment,
       );
-    }
 
-    if (!isRecord(body)) {
-      return apiError(
-        422,
-        "VALIDATION_ERROR",
-        "Проверьте заполнение полей.",
+      return HttpResponse.json(
+        assignment,
+        { status: 201 },
       );
-    }
+    },
+  ),
 
-    const {
-      title,
-      sourceAssignmentIds = [],
-    } = body;
-
-    if (
-      typeof title !== "string" ||
-      title.trim().length < 1 ||
-      title.trim().length > 200 ||
-      !Array.isArray(sourceAssignmentIds) ||
-      !sourceAssignmentIds.every(
-        (id): id is string =>
-          typeof id === "string" && isUuid(id),
-      ) ||
-      new Set(sourceAssignmentIds).size !==
-        sourceAssignmentIds.length
-    ) {
-      return apiError(
-        422,
-        "VALIDATION_ERROR",
-        "Проверьте заполнение полей.",
+  http.get(
+    "*/api/assignments",
+    ({ request }) => {
+      const url = new URL(
+        request.url,
       );
-    }
 
-    if (
-      sourceAssignmentIds.some(
-        (id) => !getAssignment(id),
-      )
-    ) {
-      return apiError(
-        404,
-        "NOT_FOUND",
-        "Задание-источник не найдено.",
+      if (
+        url.searchParams.get(
+          "mockHttpError",
+        ) === "1"
+      ) {
+        return apiError(
+          503,
+          "SERVICE_UNAVAILABLE",
+          "Сервис временно недоступен",
+        );
+      }
+
+      if (
+        url.searchParams.get(
+          "mockScenario",
+        ) === "empty"
+      ) {
+        return HttpResponse.json([]);
+      }
+
+      return HttpResponse.json(
+        allAssignments(),
       );
-    }
-
-    const id = crypto.randomUUID();
-
-    const assignment: Assignment = {
-      id,
-      title: title.trim(),
-      createdAt: new Date().toISOString(),
-      submissionCount: 0,
-      analysis: {
-        completed: 0,
-        failed: 0,
-      },
-      sourceAssignmentIds,
-      submissionUrl:
-        `${new URL(request.url).origin}/submit/mock-${id}`,
-    };
-
-    createdAssignments.set(id, assignment);
-
-    return HttpResponse.json(assignment, {
-      status: 201,
-    });
-  }),
-
-  http.get("*/api/assignments", ({ request }) => {
-    const url = new URL(request.url);
-
-    if (url.searchParams.get("mockHttpError") === "1") {
-      return apiError(
-        503,
-        "SERVICE_UNAVAILABLE",
-        "Сервис временно недоступен",
-      );
-    }
-
-    if (url.searchParams.get("mockScenario") === "empty") {
-      return HttpResponse.json([]);
-    }
-
-    return HttpResponse.json(allAssignments());
-  }),
+    },
+  ),
 
   http.get(
     "*/api/assignments/:assignmentId",
     ({ params }) => {
-      const assignment = getAssignment(
-        String(params.assignmentId),
-      );
+      const assignment =
+        getAssignment(
+          String(
+            params.assignmentId,
+          ),
+        );
 
       if (!assignment) {
         return apiError(
@@ -212,19 +319,24 @@ export const assignmentWriteHandlers = [
         );
       }
 
-      return HttpResponse.json(assignment);
+      return HttpResponse.json(
+        assignment,
+      );
     },
   ),
 
-  // Для нового задания сдач ещё нет.
-  // Для старых заданий продолжает работать
-  // обработчик из target-handlers.ts.
   http.get(
     "*/api/assignments/:assignmentId/submissions",
-    ({ params }) => {
-      const assignmentId = String(params.assignmentId);
+    ({ params, request }) => {
+      const assignmentId = String(
+        params.assignmentId,
+      );
 
-      if (deletedAssignments.has(assignmentId)) {
+      if (
+        deletedAssignments.has(
+          assignmentId,
+        )
+      ) {
         return apiError(
           404,
           "NOT_FOUND",
@@ -232,26 +344,103 @@ export const assignmentWriteHandlers = [
         );
       }
 
-      if (!createdAssignments.has(assignmentId)) {
+      if (
+        !createdAssignments.has(
+          assignmentId,
+        )
+      ) {
         return undefined;
       }
 
+      const url = new URL(
+        request.url,
+      );
+
+      const page = Number(
+        url.searchParams.get(
+          "page",
+        ) ?? 1,
+      );
+
+      const pageSize = Number(
+        url.searchParams.get(
+          "pageSize",
+        ) ?? 20,
+      );
+
+      if (
+        !Number.isInteger(page) ||
+        !Number.isInteger(pageSize) ||
+        page < 1 ||
+        pageSize < 1 ||
+        pageSize > 100
+      ) {
+        return apiError(
+          422,
+          "VALIDATION_ERROR",
+          "Некорректная пагинация.",
+        );
+      }
+
+      const sort =
+        url.searchParams.get(
+          "sort",
+        ) ?? "similarity";
+
+      if (
+        sort !== "similarity" &&
+        sort !== "ai"
+      ) {
+        return apiError(
+          422,
+          "VALIDATION_ERROR",
+          "Некорректная сортировка.",
+        );
+      }
+
+      const rows =
+        listMockSubmissionRows(
+          assignmentId,
+        );
+
+      rows.sort(
+        (a, b) =>
+          a.submissionId.localeCompare(
+            b.submissionId,
+          ),
+      );
+
+      const offset =
+        (page - 1) * pageSize;
+
       const result: SubmissionList = {
-        page: 1,
-        pageSize: 20,
-        total: 0,
-        items: [],
+        page,
+        pageSize,
+        total: rows.length,
+        items: rows.slice(
+          offset,
+          offset + pageSize,
+        ),
       };
 
-      return HttpResponse.json(result);
+      return HttpResponse.json(
+        result,
+      );
     },
   ),
 
   http.put(
     "*/api/assignments/:assignmentId/sources",
-    async ({ params, request }) => {
-      const id = String(params.assignmentId);
-      const assignment = getAssignment(id);
+    async ({
+      params,
+      request,
+    }) => {
+      const id = String(
+        params.assignmentId,
+      );
+
+      const assignment =
+        getAssignment(id);
 
       if (!assignment) {
         return apiError(
@@ -281,7 +470,8 @@ export const assignmentWriteHandlers = [
         );
       }
 
-      const sources = body.sourceAssignmentIds;
+      const sources =
+        body.sourceAssignmentIds;
 
       if (
         !Array.isArray(sources) ||
@@ -290,7 +480,8 @@ export const assignmentWriteHandlers = [
             typeof source === "string" &&
             isUuid(source),
         ) ||
-        new Set(sources).size !== sources.length ||
+        new Set(sources).size !==
+          sources.length ||
         sources.includes(id)
       ) {
         return apiError(
@@ -302,7 +493,10 @@ export const assignmentWriteHandlers = [
 
       if (
         sources.some(
-          (source) => !getAssignment(source),
+          (source) =>
+            !getAssignment(
+              source,
+            ),
         )
       ) {
         return apiError(
@@ -314,25 +508,42 @@ export const assignmentWriteHandlers = [
 
       const updated: Assignment = {
         ...assignment,
-        sourceAssignmentIds: sources,
+        sourceAssignmentIds:
+          sources,
       };
 
-      if (createdAssignments.has(id)) {
-        createdAssignments.set(id, updated);
+      if (
+        createdAssignments.has(
+          id,
+        )
+      ) {
+        createdAssignments.set(
+          id,
+          updated,
+        );
       } else {
-        editedAssignments.set(id, updated);
+        editedAssignments.set(
+          id,
+          updated,
+        );
       }
 
-      return HttpResponse.json(updated);
+      return HttpResponse.json(
+        updated,
+      );
     },
   ),
 
   http.delete(
     "*/api/assignments/:assignmentId",
     ({ params }) => {
-      const id = String(params.assignmentId);
+      const id = String(
+        params.assignmentId,
+      );
 
-      if (!getAssignment(id)) {
+      if (
+        !getAssignment(id)
+      ) {
         return apiError(
           404,
           "NOT_FOUND",
@@ -340,21 +551,38 @@ export const assignmentWriteHandlers = [
         );
       }
 
-      deletedAssignments.add(id);
+      deletedAssignments.add(
+        id,
+      );
 
-      return new HttpResponse(null, {
-        status: 204,
-      });
+      return new HttpResponse(
+        null,
+        { status: 204 },
+      );
     },
   ),
 
   http.post(
     "*/api/assignments/:assignmentId/students/:studentId/reset",
-    async ({ params, request }) => {
-      const assignmentId = String(params.assignmentId);
-      const studentId = String(params.studentId);
+    async ({
+      params,
+      request,
+    }) => {
+      const assignmentId =
+        String(
+          params.assignmentId,
+        );
 
-      if (!getAssignment(assignmentId)) {
+      const studentId =
+        String(
+          params.studentId,
+        );
+
+      if (
+        !getAssignment(
+          assignmentId,
+        )
+      ) {
         return apiError(
           404,
           "NOT_FOUND",
@@ -376,8 +604,11 @@ export const assignmentWriteHandlers = [
 
       if (
         !isRecord(body) ||
-        typeof body.expectedSubmissionId !== "string" ||
-        !isUuid(body.expectedSubmissionId)
+        typeof body.expectedSubmissionId !==
+          "string" ||
+        !isUuid(
+          body.expectedSubmissionId,
+        )
       ) {
         return apiError(
           422,
@@ -386,9 +617,50 @@ export const assignmentWriteHandlers = [
         );
       }
 
+      const expectedId =
+        body.expectedSubmissionId;
+
+      // Сначала проверяем работу,
+      // поступившую через студенческий мок.
+      const mockWork =
+        getMockWork(
+          assignmentId,
+          studentId,
+        );
+
+      if (mockWork) {
+        const outcome =
+          openMockWorkAttempt(
+            assignmentId,
+            studentId,
+            expectedId,
+          );
+
+        if (
+          outcome === "changed"
+        ) {
+          return apiError(
+            409,
+            "SUBMISSION_CHANGED",
+            "Текущая работа изменилась. Обновите список.",
+          );
+        }
+
+        return new HttpResponse(
+          null,
+          { status: 204 },
+        );
+      }
+
+      // Для готовых демонстрационных
+      // заданий сохраняем прежнюю логику.
       const submission =
-        mockSubmissions[assignmentId]?.items.find(
-          (item) => item.studentId === studentId,
+        mockSubmissions[
+          assignmentId
+        ]?.items.find(
+          (item) =>
+            item.studentId ===
+            studentId,
         );
 
       if (!submission) {
@@ -401,7 +673,7 @@ export const assignmentWriteHandlers = [
 
       if (
         submission.submissionId !==
-        body.expectedSubmissionId
+        expectedId
       ) {
         return apiError(
           409,
@@ -411,12 +683,16 @@ export const assignmentWriteHandlers = [
       }
 
       resetAttempts.add(
-        resetKey(assignmentId, studentId),
+        resetKey(
+          assignmentId,
+          studentId,
+        ),
       );
 
-      return new HttpResponse(null, {
-        status: 204,
-      });
+      return new HttpResponse(
+        null,
+        { status: 204 },
+      );
     },
   ),
 ];

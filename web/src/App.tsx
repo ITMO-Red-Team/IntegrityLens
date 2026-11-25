@@ -9,10 +9,12 @@ import { useState } from "react";
 import {
   createBrowserRouter,
   createMemoryRouter,
+  Link,
   Navigate,
   Outlet,
   RouterProvider,
   useLocation,
+  useMatch,
   useNavigate,
   type RouteObject,
 } from "react-router-dom";
@@ -63,6 +65,7 @@ function ProtectedLayout({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const submissionRoute = useMatch("/submit/:token");
   const queryClient = useQueryClient();
 
   const {
@@ -158,7 +161,12 @@ function ProtectedLayout({
     );
   }
 
-  if (user.role !== role) {
+  const submissionAccessDenied =
+    user.role === "teacher" &&
+    role === "student" &&
+    submissionRoute !== null;
+
+  if (user.role !== role && !submissionAccessDenied) {
     return (
       <Navigate
         to={
@@ -201,7 +209,21 @@ function ProtectedLayout({
       </header>
 
       <main className="mx-auto max-w-[1200px] px-4 py-8">
-        <Outlet />
+        {submissionAccessDenied ? (
+          <section className="panel mx-auto max-w-2xl p-6">
+            <h1 className="mb-3 text-xl font-semibold">
+              Не удалось открыть страницу сдачи
+            </h1>
+            <p role="alert" className="mb-4 text-muted">
+              Сдача работы доступна только студентам.
+            </p>
+            <Link to="/assignments" replace className="btn">
+              К моим заданиям
+            </Link>
+          </section>
+        ) : (
+          <Outlet />
+        )}
       </main>
     </div>
   );

@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import {
   Link,
+  matchPath,
   useLocation,
   useNavigate,
 } from "react-router-dom";
@@ -50,7 +51,7 @@ function getReturnPath(
   const pathname =
     value.split(/[?#]/, 1)[0] ?? "";
 
-  if (!/^\/submit\/[^/]+$/.test(pathname)) {
+  if (!matchPath("/submit/:token", pathname)) {
     return null;
   }
 
@@ -129,11 +130,10 @@ export function AuthPage({
       );
 
       const destination =
-        user.role === "student" && returnPath
-          ? returnPath
-          : user.role === "teacher"
-            ? "/assignments"
-            : "/student";
+        returnPath ??
+        (user.role === "teacher"
+          ? "/assignments"
+          : "/student");
 
       navigate(destination, {
         replace: true,

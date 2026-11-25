@@ -1,5 +1,9 @@
 export type Labels = (id: string) => string;
 
+export function anonymousSubmissionLabel(submissionId: string): string {
+  return `A-${submissionId}`;
+}
+
 export function makeLabels(submissions: { id: string }[]): Labels {
   const map = new Map(submissions.map((s, i) => [s.id, `S-${String(i + 1).padStart(3, "0")}`]));
   return (id) => map.get(id) ?? id.slice(0, 8);

@@ -90,7 +90,7 @@ describe("Путь от сдачи студента к просмотру пре
 
     const workLink = within(table).getByRole(
       "link",
-      { name: "Открыть работу A-01" },
+      { name: `Открыть работу A-${receipt.submissionId}` },
     );
 
     expect(workLink).toHaveAttribute(
@@ -140,7 +140,7 @@ describe("Путь от сдачи студента к просмотру пре
 
     await user.click(
       screen.getByRole("button", {
-        name: "Сбросить попытку A-01",
+        name: `Сбросить попытку A-${receipt.submissionId}`,
       }),
     );
 

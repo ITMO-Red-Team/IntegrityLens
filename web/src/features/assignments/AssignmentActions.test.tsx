@@ -154,9 +154,11 @@ describe("Управление заданием", () => {
 
     await screen.findByRole("table");
 
+    const submission = mockSubmissions[MOCK_IDS.success]?.items[0];
+
     await user.click(
       screen.getByRole("button", {
-        name: "Сбросить попытку A-01",
+        name: `Сбросить попытку A-${submission?.submissionId}`,
       }),
     );
 

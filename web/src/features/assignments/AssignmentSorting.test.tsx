@@ -43,14 +43,16 @@ if (items.length !== 2) {
   );
 }
 
-function firstWorkHref(): string | null {
+function workLinks() {
   const table = screen.getByRole("table");
 
-  return within(table)
-    .getByRole("link", {
-      name: "Открыть работу A-01",
-    })
-    .getAttribute("href");
+  return within(table).getAllByRole("link", {
+    name: /^Открыть работу /,
+  });
+}
+
+function firstWorkHref() {
+  return workLinks()[0]?.getAttribute("href");
 }
 
 describe("Серверная сортировка работ", () => {
@@ -116,6 +118,8 @@ describe("Серверная сортировка работ", () => {
       `/assignments/${MOCK_IDS.success}/submissions/${items[0]?.submissionId}`,
     );
 
+    const initialLabels = workLinks().map((link) => link.textContent);
+
     await user.selectOptions(
       select,
       "ai",
@@ -143,6 +147,9 @@ describe("Серверная сортировка работ", () => {
     await waitFor(() => {
       expect(firstWorkHref()).toBe(
         `/assignments/${MOCK_IDS.success}/submissions/${expectedFirstWork.submissionId}`,
+      );
+      expect(workLinks().map((link) => link.textContent)).toEqual(
+        [...initialLabels].reverse(),
       );
     });
 

@@ -170,7 +170,7 @@ describe("Возврат к заданию после авторизации", (
     ).toBeInTheDocument();
   });
 
-  it("не открывает студенческую страницу преподавателю", async () => {
+  it("показывает преподавателю ограничение на сдачу", async () => {
     await authApi.register({
       fullName: "Преподаватель Тестовый",
       email: "teacher-redirect@example.com",
@@ -200,15 +200,25 @@ describe("Возврат к заданию после авторизации", (
     );
 
     expect(
-      await screen.findByRole("heading", {
-        name: "Мои задания",
-      }),
-    ).toBeInTheDocument();
+      await screen.findByRole("alert"),
+    ).toHaveTextContent("Сдача работы доступна только студентам.");
 
     expect(
       screen.queryByLabelText(
         "Java-файл",
       ),
     ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("link", {
+        name: "К моим заданиям",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Мои задания",
+      }),
+    ).toBeInTheDocument();
   });
 });

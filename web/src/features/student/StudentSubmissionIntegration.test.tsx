@@ -284,13 +284,10 @@ describe("Интеграция студенческой сдачи", () => {
     );
 
     expect(
-      await screen.findByRole(
-        "heading",
-        {
-          name: "Мои задания",
-        },
-      ),
-    ).toBeInTheDocument();
+      await screen.findByRole("alert"),
+    ).toHaveTextContent(
+      "Сдача работы доступна только студентам.",
+    );
 
     expect(
       screen.queryByLabelText(

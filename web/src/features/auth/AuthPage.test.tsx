@@ -180,6 +180,10 @@ describe("Авторизация по новому API", () => {
         name: "Моя работа",
       }),
     ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(/откройте ссылку на задание от преподавателя/i),
+    ).toBeInTheDocument();
   });
 
   it("отклоняет неправильный пароль", async () => {

@@ -29,6 +29,7 @@ import { AuthPage } from "./features/auth/AuthPage";
 import { AssignmentsPage } from "./features/assignments/AssignmentsPage";
 import { CreateAssignmentPage } from "./features/assignments/CreateAssignmentPage";
 import { AssignmentCreatedPage } from "./features/assignments/AssignmentCreatedPage";
+import { AssignmentPage } from "./features/assignments/AssignmentPage";
 
 import { authApi } from "./api/target/auth";
 import { ApiError } from "./api/target/client";
@@ -156,7 +157,10 @@ function Placeholder({
 }) {
   return (
     <section className="panel p-8">
-      <h1 className="mb-3 text-2xl">{title}</h1>
+      <h1 className="mb-3 text-2xl">
+        {title}
+      </h1>
+
       <p className="text-muted">
         Следующим шагом реализуем эту страницу по макету Miro.
       </p>
@@ -190,7 +194,7 @@ export const routes: RouteObject[] = [
       },
       {
         path: "/assignments/:assignmentId",
-        element: <Placeholder title="Задание" />,
+        element: <AssignmentPage />,
       },
     ],
   },
@@ -204,8 +208,7 @@ export const routes: RouteObject[] = [
     ],
   },
 
-  // Старые экраны оставляем доступными
-  // до завершения перехода на новый API.
+  // Старые экраны остаются доступными до миграции.
   {
     element: <Layout />,
     children: [

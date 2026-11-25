@@ -113,8 +113,6 @@ describe("Экран «Мои задания»", () => {
       http.get("*/api/assignments", () => {
         attempts += 1;
 
-        // Первые два запроса завершаются ошибкой:
-        // исходный запрос и автоматический retry.
         if (attempts <= 2) {
           return HttpResponse.json(
             {
@@ -125,7 +123,6 @@ describe("Экран «Мои задания»", () => {
           );
         }
 
-        // После нажатия «Повторить» запрос успешен.
         return HttpResponse.json(mockAssignments);
       }),
     );
@@ -136,8 +133,6 @@ describe("Экран «Мои задания»", () => {
       <App initialEntries={["/assignments"]} />,
     );
 
-    // React Query выполняет автоматический retry
-    // с задержкой. Даём ему время завершиться.
     const alert = await screen.findByRole(
       "alert",
       {},
@@ -163,7 +158,7 @@ describe("Экран «Мои задания»", () => {
     expect(attempts).toBe(3);
   });
 
-  it("ведёт к странице выбранного задания", async () => {
+  it("ведёт к настоящей странице задания", async () => {
     authenticateTeacher();
 
     const user = userEvent.setup();
@@ -185,8 +180,12 @@ describe("Экран «Мои задания»", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Задание",
+        name: "Успешная проверка",
       }),
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByRole("table"),
     ).toBeInTheDocument();
   });
 });

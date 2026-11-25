@@ -1,6 +1,6 @@
 
-import type { ApiErrorBody } from "./types";
 import type {
+  ApiErrorBody,
   User,
   Assignment,
   AssignmentSummary,
@@ -10,7 +10,8 @@ import type {
   PairResult,
 } from "./types";
 
-const BASE = (import.meta.env.VITE_API_BASE as string | undefined) || "";
+const BASE =
+  (import.meta.env.VITE_API_BASE as string | undefined) || "";
 
 export class ApiError extends Error {
   constructor(
@@ -60,6 +61,7 @@ async function checkResponse(
       );
     }
   } catch {
+    // Для HTTP-ошибки без JSON используем общий текст.
   }
 
   throw error;
@@ -137,10 +139,45 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  updateAssignmentSources: (
+    assignmentId: string,
+    sourceAssignmentIds: string[],
+  ) =>
+    apiRequest<Assignment>(
+      `/assignments/${enc(assignmentId)}/sources`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sourceAssignmentIds,
+        }),
+      },
+    ),
+
   deleteAssignment: (assignmentId: string) =>
     apiVoidRequest(
       `/assignments/${enc(assignmentId)}`,
       { method: "DELETE" },
+    ),
+
+  resetStudentAttempt: (
+    assignmentId: string,
+    studentId: string,
+    expectedSubmissionId: string,
+  ) =>
+    apiVoidRequest(
+      `/assignments/${enc(assignmentId)}/students/${enc(studentId)}/reset`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          expectedSubmissionId,
+        }),
+      },
     ),
 
   listSubmissions: (assignmentId: string) =>

@@ -17,10 +17,22 @@ export const qk = {
   submissions: (id: string) =>
     ["target", "submissions", id] as const,
 
-  submission: (assignmentId: string, submissionId: string) =>
-    ["target", "submission", assignmentId, submissionId] as const,
+  submission: (
+    assignmentId: string,
+    submissionId: string,
+  ) =>
+    [
+      "target",
+      "submission",
+      assignmentId,
+      submissionId,
+    ] as const,
 
-  pair: (assignmentId: string, a: string, b: string) =>
+  pair: (
+    assignmentId: string,
+    a: string,
+    b: string,
+  ) =>
     ["target", "pair", assignmentId, a, b] as const,
 };
 
@@ -39,10 +51,13 @@ export function useAssignment(id: string | undefined) {
   });
 }
 
-export function useSubmissions(assignmentId: string | undefined) {
+export function useSubmissions(
+  assignmentId: string | undefined,
+) {
   return useQuery({
     queryKey: qk.submissions(assignmentId ?? ""),
-    queryFn: () => api.listSubmissions(assignmentId!),
+    queryFn: () =>
+      api.listSubmissions(assignmentId!),
     enabled: !!assignmentId,
   });
 }
@@ -57,7 +72,10 @@ export function useSubmission(
       submissionId ?? "",
     ),
     queryFn: () =>
-      api.getSubmission(assignmentId!, submissionId!),
+      api.getSubmission(
+        assignmentId!,
+        submissionId!,
+      ),
     enabled: !!assignmentId && !!submissionId,
   });
 }
@@ -73,7 +91,8 @@ export function usePair(
       a ?? "",
       b ?? "",
     ),
-    queryFn: () => api.getPair(assignmentId!, a!, b!),
+    queryFn: () =>
+      api.getPair(assignmentId!, a!, b!),
     enabled: !!assignmentId && !!a && !!b,
   });
 }
@@ -85,9 +104,47 @@ export function useCreateAssignment() {
     mutationFn: (input: CreateAssignmentRequest) =>
       api.createAssignment(input),
 
-    onSuccess: () => {
-      qc.invalidateQueries({
+    onSuccess: (created) => {
+      qc.setQueryData(
+        qk.assignment(created.id),
+        created,
+      );
+
+      void qc.invalidateQueries({
         queryKey: qk.assignments,
+      });
+    },
+  });
+}
+
+export function useUpdateAssignmentSources() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      assignmentId,
+      sourceAssignmentIds,
+    }: {
+      assignmentId: string;
+      sourceAssignmentIds: string[];
+    }) =>
+      api.updateAssignmentSources(
+        assignmentId,
+        sourceAssignmentIds,
+      ),
+
+    onSuccess: (updated) => {
+      qc.setQueryData(
+        qk.assignment(updated.id),
+        updated,
+      );
+
+      void qc.invalidateQueries({
+        queryKey: qk.assignments,
+      });
+
+      void qc.invalidateQueries({
+        queryKey: qk.submissions(updated.id),
       });
     },
   });
@@ -99,10 +156,67 @@ export function useDeleteAssignment() {
   return useMutation({
     mutationFn: api.deleteAssignment,
 
-    onSuccess: () => {
-      qc.invalidateQueries({
+    onSuccess: (_, assignmentId) => {
+      qc.removeQueries({
+        queryKey: qk.assignment(assignmentId),
+      });
+
+      qc.removeQueries({
+        queryKey: qk.submissions(assignmentId),
+      });
+
+      void qc.invalidateQueries({
         queryKey: qk.assignments,
       });
+    },
+  });
+}
+
+export function useResetStudentAttempt() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      assignmentId,
+      studentId,
+      expectedSubmissionId,
+    }: {
+      assignmentId: string;
+      studentId: string;
+      expectedSubmissionId: string;
+    }) =>
+      api.resetStudentAttempt(
+        assignmentId,
+        studentId,
+        expectedSubmissionId,
+      ),
+
+    onSuccess: (_, variables) => {
+      void qc.invalidateQueries({
+        queryKey: qk.submissions(
+          variables.assignmentId,
+        ),
+      });
+
+      void qc.invalidateQueries({
+        queryKey: qk.assignment(
+          variables.assignmentId,
+        ),
+      });
+    },
+
+    onError: (error, variables) => {
+      if (
+        error instanceof Error &&
+        "status" in error &&
+        error.status === 409
+      ) {
+        void qc.invalidateQueries({
+          queryKey: qk.submissions(
+            variables.assignmentId,
+          ),
+        });
+      }
     },
   });
 }
